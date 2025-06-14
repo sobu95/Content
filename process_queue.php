@@ -43,6 +43,22 @@ function logMessage($message, $type = 'info') {
 }
 
 /**
+ * Zapisuje timestamp ostatniego uruchomienia procesora
+ */
+function updateLastRunTimestamp($pdo) {
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO settings (setting_key, setting_value) 
+            VALUES ('last_queue_run', NOW()) 
+            ON DUPLICATE KEY UPDATE setting_value = NOW()
+        ");
+        $stmt->execute();
+    } catch (Exception $e) {
+        logMessage("Failed to update last run timestamp: " . $e->getMessage(), 'error');
+    }
+}
+
+/**
  * Pobiera klucz API Gemini z ustawień bazy danych.
  */
 function getGeminiApiKey() {
@@ -184,12 +200,51 @@ function callGeminiAPI($prompt, $api_key) {
 }
 
 /**
+ * Tworzy zadanie humanizacji dla wygenerowanego tekstu
+ */
+function createHumanizationTask($pdo, $task_item_id, $generated_text) {
+    try {
+        // Sprawdź czy zadanie humanizacji już istnieje
+        $stmt = $pdo->prepare("
+            SELECT id FROM task_queue 
+            WHERE task_item_id = ? AND priority >= 1000
+        ");
+        $stmt->execute([$task_item_id]);
+        
+        if ($stmt->fetch()) {
+            logMessage("Humanization task already exists for task item ID: $task_item_id");
+            return;
+        }
+        
+        // Dodaj zadanie humanizacji z bardzo wysokim priorytetem (1000+)
+        $stmt = $pdo->prepare("
+            INSERT INTO task_queue (task_item_id, priority, status) 
+            VALUES (?, 1000, 'pending')
+        ");
+        $stmt->execute([$task_item_id]);
+        
+        logMessage("Created humanization task for task item ID: $task_item_id with priority 1000", 'success');
+        
+    } catch (Exception $e) {
+        logMessage("Failed to create humanization task for ID $task_item_id: " . $e->getMessage(), 'error');
+    }
+}
+
+/**
+ * Sprawdza czy zadanie jest zadaniem humanizacji
+ */
+function isHumanizationTask($queue_item) {
+    return $queue_item['priority'] >= 1000;
+}
+
+/**
  * Przetwarza pojedynczy element zadania z kolejki.
  */
 function processTaskItem($pdo, $queue_item, $api_key) {
     $task_item_id = $queue_item['task_item_id'];
+    $is_humanization = isHumanizationTask($queue_item);
     
-    logMessage("Processing task item ID: $task_item_id");
+    logMessage("Processing task item ID: $task_item_id" . ($is_humanization ? " (HUMANIZATION)" : " (GENERATION)"));
     
     // Pobierz dane zadania
     $stmt = $pdo->prepare("
@@ -208,80 +263,104 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     
     logMessage("Task item data for ID {$task_item_id}: " . json_encode($task_item));
     
-    // Pobierz prompt generowania
-    $stmt = $pdo->prepare("SELECT content FROM prompts WHERE content_type_id = ? AND type = 'generate'");
-    $stmt->execute([$task_item['content_type_id']]);
-    $generate_prompt_template_data = $stmt->fetch();
-    $generate_prompt_template = $generate_prompt_template_data ? $generate_prompt_template_data['content'] : null;
+    if ($is_humanization) {
+        // HUMANIZACJA - pobierz wygenerowany tekst i przepuść przez prompt weryfikacji
+        $stmt = $pdo->prepare("SELECT generated_text FROM generated_content WHERE task_item_id = ?");
+        $stmt->execute([$task_item_id]);
+        $content = $stmt->fetch();
+        
+        if (!$content || !$content['generated_text']) {
+            throw new Exception("No generated text found for humanization task item ID: $task_item_id");
+        }
+        
+        // Pobierz prompt weryfikacji
+        $stmt = $pdo->prepare("SELECT content FROM prompts WHERE content_type_id = ? AND type = 'verify'");
+        $stmt->execute([$task_item['content_type_id']]);
+        $verify_prompt_template_data = $stmt->fetch();
+        $verify_prompt_template = $verify_prompt_template_data ? $verify_prompt_template_data['content'] : null;
+        
+        if (!$verify_prompt_template) {
+            throw new Exception("Verify prompt not found for content type ID: " . $task_item['content_type_id']);
+        }
+        
+        // Przygotuj prompt weryfikacji z wygenerowaną treścią
+        $verify_replacements = ['generated_text' => $content['generated_text']];
+        $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
+        
+        logMessage("Processing humanization with verify prompt length: " . strlen($verify_prompt));
+        
+        try {
+            $verified_text = callGeminiAPI($verify_prompt, $api_key);
+            logMessage("Content humanized successfully for ID {$task_item_id}, length: " . strlen($verified_text));
+            
+            // Zaktualizuj zweryfikowany tekst
+            $stmt = $pdo->prepare("
+                UPDATE generated_content 
+                SET verified_text = ?, status = 'verified' 
+                WHERE task_item_id = ?
+            ");
+            $stmt->execute([$verified_text, $task_item_id]);
+            
+            logMessage("Humanization completed and saved for ID {$task_item_id}");
+            
+        } catch (Exception $e) {
+            logMessage("Error humanizing content for ID {$task_item_id}: " . $e->getMessage(), 'error');
+            throw $e;
+        }
+        
+    } else {
+        // GENEROWANIE - standardowy proces generowania
+        
+        // Pobierz prompt generowania
+        $stmt = $pdo->prepare("SELECT content FROM prompts WHERE content_type_id = ? AND type = 'generate'");
+        $stmt->execute([$task_item['content_type_id']]);
+        $generate_prompt_template_data = $stmt->fetch();
+        $generate_prompt_template = $generate_prompt_template_data ? $generate_prompt_template_data['content'] : null;
+        
+        if (!$generate_prompt_template) {
+            throw new Exception("Generate prompt not found for content type ID: " . $task_item['content_type_id']);
+        }
+        
+        $input_data = json_decode($task_item['input_data'], true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception("Invalid JSON input_data for task item ID: {$task_item_id} - " . json_last_error_msg());
+        }
 
-    // Pobierz prompt weryfikacji
-    $stmt = $pdo->prepare("SELECT content FROM prompts WHERE content_type_id = ? AND type = 'verify'");
-    $stmt->execute([$task_item['content_type_id']]);
-    $verify_prompt_template_data = $stmt->fetch();
-    $verify_prompt_template = $verify_prompt_template_data ? $verify_prompt_template_data['content'] : null;
-    
-    if (!$generate_prompt_template) {
-        throw new Exception("Generate prompt not found for content type ID: " . $task_item['content_type_id']);
+        logMessage("Input data for ID {$task_item_id}: " . json_encode($input_data));
+        
+        // Przygotuj dane do zamiany w promptach
+        $replacements = $input_data;
+        $replacements['strictness_level'] = $task_item['strictness_level'];
+        
+        // Zamień zmienne w promptcie generowania
+        $generate_prompt = replacePromptPlaceholders($generate_prompt_template, $replacements);
+        
+        logMessage("Final generate prompt length: " . strlen($generate_prompt));
+        
+        // Wygeneruj treść
+        try {
+            $generated_text = callGeminiAPI($generate_prompt, $api_key);
+            logMessage("Content generated successfully for ID {$task_item_id}, length: " . strlen($generated_text));
+        } catch (Exception $e) {
+            logMessage("Error generating content for ID {$task_item_id}: " . $e->getMessage(), 'error');
+            throw $e;
+        }
+        
+        // Zapisz wygenerowany tekst
+        $stmt = $pdo->prepare("
+            INSERT INTO generated_content (task_item_id, generated_text, status) 
+            VALUES (?, ?, 'generated')
+            ON DUPLICATE KEY UPDATE 
+            generated_text = VALUES(generated_text),
+            status = VALUES(status)
+        ");
+        $stmt->execute([$task_item_id, $generated_text]);
+        
+        logMessage("Content generated and saved for ID {$task_item_id}");
+        
+        // Utwórz zadanie humanizacji
+        createHumanizationTask($pdo, $task_item_id, $generated_text);
     }
-    
-    if (!$verify_prompt_template) {
-        throw new Exception("Verify prompt not found for content type ID: " . $task_item['content_type_id']);
-    }
-    
-    $input_data = json_decode($task_item['input_data'], true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        throw new Exception("Invalid JSON input_data for task item ID: {$task_item_id} - " . json_last_error_msg());
-    }
-
-    logMessage("Input data for ID {$task_item_id}: " . json_encode($input_data));
-    
-    // Przygotuj dane do zamiany w promptach
-    $replacements = $input_data;
-    $replacements['strictness_level'] = $task_item['strictness_level'];
-    
-    // Zamień zmienne w promptcie generowania
-    $generate_prompt = replacePromptPlaceholders($generate_prompt_template, $replacements);
-    
-    logMessage("Final generate prompt length: " . strlen($generate_prompt));
-    
-    // KROK 1: Wygeneruj treść
-    try {
-        $generated_text = callGeminiAPI($generate_prompt, $api_key);
-        logMessage("Content generated successfully for ID {$task_item_id}, length: " . strlen($generated_text));
-    } catch (Exception $e) {
-        logMessage("Error generating content for ID {$task_item_id}: " . $e->getMessage(), 'error');
-        throw $e;
-    }
-    
-    // KROK 2: Zweryfikuj treść
-    logMessage("Verifying content for ID {$task_item_id}...");
-    
-    // Przygotuj prompt weryfikacji z wygenerowaną treścią
-    $verify_replacements = ['generated_text' => $generated_text];
-    $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
-    
-    try {
-        $verified_text = callGeminiAPI($verify_prompt, $api_key);
-        logMessage("Content verified successfully for ID {$task_item_id}, length: " . strlen($verified_text));
-    } catch (Exception $e) {
-        logMessage("Error verifying content for ID {$task_item_id}: " . $e->getMessage(), 'error');
-        // W przypadku błędu weryfikacji, użyj oryginalnego tekstu
-        $verified_text = $generated_text;
-        logMessage("Using original generated text as verified text due to verification failure.");
-    }
-    
-    // KROK 3: Zapisz oba teksty
-    $stmt = $pdo->prepare("
-        INSERT INTO generated_content (task_item_id, generated_text, verified_text, status) 
-        VALUES (?, ?, ?, 'verified')
-        ON DUPLICATE KEY UPDATE 
-        generated_text = VALUES(generated_text),
-        verified_text = VALUES(verified_text),
-        status = VALUES(status)
-    ");
-    $stmt->execute([$task_item_id, $generated_text, $verified_text]);
-    
-    logMessage("Content generated and saved for ID {$task_item_id}");
 }
 
 /**
@@ -360,6 +439,10 @@ if (!$is_cli_mode) {
 logMessage("Starting queue processor. Mode: " . ($is_cli_mode ? "CLI" : "WWW (Manual Trigger)"));
 
 $pdo = getDbConnection();
+
+// Zaktualizuj timestamp ostatniego uruchomienia
+updateLastRunTimestamp($pdo);
+
 $api_key = getGeminiApiKey();
 $processing_delay_minutes = getProcessingDelayMinutes();
 
@@ -382,6 +465,7 @@ do {
         $pdo->beginTransaction();
         
         // Pobierz następny element z kolejki - TYLKO JEDEN NA RAZ
+        // Priorytet 1000+ to zadania humanizacji, które mają pierwszeństwo
         $stmt = $pdo->prepare("
             SELECT tq.*, ti.task_id
             FROM task_queue tq
@@ -405,7 +489,8 @@ do {
             continue;
         }
         
-        logMessage("Attempting to process queue item ID: {$queue_item['id']} (Task Item ID: {$queue_item['task_item_id']})");
+        $task_type = isHumanizationTask($queue_item) ? "HUMANIZATION" : "GENERATION";
+        logMessage("Attempting to process queue item ID: {$queue_item['id']} (Task Item ID: {$queue_item['task_item_id']}) - TYPE: $task_type");
 
         // Oznacz element kolejki jako przetwarzany
         $stmt = $pdo->prepare("UPDATE task_queue SET status = 'processing', processed_at = NOW() WHERE id = ?");

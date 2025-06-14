@@ -46,6 +46,12 @@ $content_count = $stmt->fetch()['count'];
 
 $stmt = $pdo->query("SELECT COUNT(*) as count FROM task_queue WHERE status = 'pending'");
 $queue_count = $stmt->fetch()['count'];
+
+// Pobierz informację o ostatnim uruchomieniu procesora kolejki
+$last_run = null;
+if (isset($settings['last_queue_run'])) {
+    $last_run = $settings['last_queue_run'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -194,18 +200,40 @@ $queue_count = $stmt->fetch()['count'];
                         
                         <div class="card mt-4">
                             <div class="card-header">
-                                <h5 class="mb-0">Zarządzanie kolejką</h5>
+                                <h5 class="mb-0">Status procesora kolejki</h5>
                             </div>
                             <div class="card-body">
+                                <?php if ($last_run): ?>
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle"></i>
+                                        <strong>Ostatnie uruchomienie:</strong><br>
+                                        <?= date('d.m.Y H:i:s', strtotime($last_run)) ?>
+                                        <br><small class="text-muted">
+                                            (<?= time() - strtotime($last_run) ?> sekund temu)
+                                        </small>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Procesor kolejki nie był jeszcze uruchamiany.
+                                    </div>
+                                <?php endif; ?>
+                                
                                 <p class="text-muted">
                                     Aby uruchomić przetwarzanie kolejki, wykonaj poniższą komendę na serwerze:
                                 </p>
-                                <code>php process_queue.php</code>
+                                <code>php <?= __DIR__ ?>/process_queue.php</code>
                                 
                                 <p class="text-muted mt-3">
                                     Lub dodaj do cron-a dla automatycznego przetwarzania:
                                 </p>
-                                <code>* * * * * php /path/to/process_queue.php</code>
+                                <code>* * * * * /usr/bin/php <?= __DIR__ ?>/process_queue.php</code>
+                                
+                                <div class="mt-3">
+                                    <a href="process_queue.php" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-play"></i> Test ręczny
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
