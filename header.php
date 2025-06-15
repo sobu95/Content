@@ -35,6 +35,8 @@
                         <?= htmlspecialchars($_SESSION['user_email']) ?>
                     </a>
                     <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="profile.php">Profil</a></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="logout.php">Wyloguj się</a></li>
                     </ul>
                 </li>

@@ -7,6 +7,7 @@ if (!isset($_GET['task_id']) || !is_numeric($_GET['task_id'])) {
 }
 
 $task_id = intval($_GET['task_id']);
+$content_type = $_GET['type'] ?? 'verified'; // 'verified' lub 'generated'
 $pdo = getDbConnection();
 
 // Sprawdź czy zadanie należy do użytkownika
@@ -25,13 +26,25 @@ if (!$task) {
 }
 
 // Pobierz wygenerowane treści
-$stmt = $pdo->prepare("
-    SELECT ti.url, gc.verified_text, gc.generated_text
-    FROM task_items ti
-    JOIN generated_content gc ON ti.id = gc.task_item_id
-    WHERE ti.task_id = ? AND ti.status = 'completed'
-    ORDER BY ti.id
-");
+if ($content_type === 'generated') {
+    $stmt = $pdo->prepare("
+        SELECT ti.url, gc.generated_text as content_text
+        FROM task_items ti
+        JOIN generated_content gc ON ti.id = gc.task_item_id
+        WHERE ti.task_id = ? AND ti.status = 'completed' AND gc.generated_text IS NOT NULL
+        ORDER BY ti.id
+    ");
+} else {
+    $stmt = $pdo->prepare("
+        SELECT ti.url, 
+               COALESCE(gc.verified_text, gc.generated_text) as content_text
+        FROM task_items ti
+        JOIN generated_content gc ON ti.id = gc.task_item_id
+        WHERE ti.task_id = ? AND ti.status = 'completed'
+        ORDER BY ti.id
+    ");
+}
+
 $stmt->execute([$task_id]);
 $contents = $stmt->fetchAll();
 
@@ -41,7 +54,8 @@ if (empty($contents)) {
 }
 
 // Utwórz dokument DOCX
-$filename = 'content_' . $task_id . '_' . date('Y-m-d_H-i-s') . '.docx';
+$type_suffix = $content_type === 'generated' ? '_generated' : '_verified';
+$filename = 'content_' . $task_id . $type_suffix . '_' . date('Y-m-d_H-i-s') . '.docx';
 
 // Rozpocznij buforowanie wyjścia
 ob_start();
@@ -286,7 +300,7 @@ $document_content = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 foreach ($contents as $content) {
     $url = htmlspecialchars($content['url'], ENT_XML1, 'UTF-8');
-    $text = $content['verified_text'] ?: $content['generated_text'];
+    $text = $content['content_text'];
     
     // Dodaj URL jako nagłówek 1
     $document_content .= '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>' . $url . '</w:t></w:r></w:p>';

@@ -104,6 +104,12 @@ $content_type_fields = json_decode($task['fields'], true);
             max-width: 250px;
             word-break: break-all;
         }
+        .btn-group .btn {
+            margin-right: 10px;
+        }
+        .btn-group .btn:last-child {
+            margin-right: 0;
+        }
     </style>
 </head>
 <body>
@@ -117,12 +123,15 @@ $content_type_fields = json_decode($task['fields'], true);
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2"><?= htmlspecialchars($task['name']) ?></h1>
                     <div>
-                        <a href="tasks.php" class="btn btn-outline-secondary">
+                        <a href="tasks.php" class="btn btn-outline-secondary me-2">
                             <i class="fas fa-arrow-left"></i> Powrót
                         </a>
                         <?php if (count($task_items) > 0): ?>
-                            <a href="export_docx.php?task_id=<?= $task_id ?>" class="btn btn-success">
-                                <i class="fas fa-download"></i> Eksport DOCX
+                            <a href="export_docx.php?task_id=<?= $task_id ?>&type=verified" class="btn btn-success me-2">
+                                <i class="fas fa-download"></i> Eksport DOCX (Zweryfikowane)
+                            </a>
+                            <a href="export_docx.php?task_id=<?= $task_id ?>&type=generated" class="btn btn-outline-success">
+                                <i class="fas fa-download"></i> Eksport DOCX (Oryginalne)
                             </a>
                         <?php endif; ?>
                     </div>

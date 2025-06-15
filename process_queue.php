@@ -3,6 +3,7 @@
 // Może być uruchamiany przez cron/daemon (CLI) lub ręcznie (WWW)
 
 require_once 'config.php';
+require_once 'fetch_page_content.php';
 
 // Zmienna globalna do określania trybu (CLI vs WWW)
 $is_cli_mode = php_sapi_name() === 'cli';
@@ -78,6 +79,22 @@ function getProcessingDelayMinutes() {
     $stmt->execute();
     $result = $stmt->fetch();
     return $result ? (int)$result['setting_value'] : 1; 
+}
+
+/**
+ * Loguje prompt do bazy danych
+ */
+function logPromptToDatabase($pdo, $task_item_id, $prompt_type, $prompt_content, $api_response = null) {
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO prompt_logs (task_item_id, prompt_type, prompt_content, api_response) 
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$task_item_id, $prompt_type, $prompt_content, $api_response]);
+        logMessage("Prompt logged to database for task item ID: $task_item_id, type: $prompt_type");
+    } catch (Exception $e) {
+        logMessage("Failed to log prompt to database: " . $e->getMessage(), 'error');
+    }
 }
 
 /**
@@ -279,6 +296,8 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         $verify_prompt_template_data = $stmt->fetch();
         $verify_prompt_template = $verify_prompt_template_data ? $verify_prompt_template_data['content'] : null;
         
+        
+        
         if (!$verify_prompt_template) {
             throw new Exception("Verify prompt not found for content type ID: " . $task_item['content_type_id']);
         }
@@ -292,6 +311,9 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         try {
             $verified_text = callGeminiAPI($verify_prompt, $api_key);
             logMessage("Content humanized successfully for ID {$task_item_id}, length: " . strlen($verified_text));
+            
+            // Loguj prompt weryfikacji do bazy danych
+            logPromptToDatabase($pdo, $task_item_id, 'verify', $verify_prompt, $verified_text);
             
             // Zaktualizuj zweryfikowany tekst
             $stmt = $pdo->prepare("
@@ -332,6 +354,16 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         $replacements = $input_data;
         $replacements['strictness_level'] = $task_item['strictness_level'];
         
+        // Sprawdź czy ma pobrać treść strony
+        if (isset($input_data['page_content']) && $input_data['page_content'] === 'TAK' && isset($input_data['url'])) {
+            logMessage("Fetching page content for URL: " . $input_data['url']);
+            $page_content = fetchPageContent($input_data['url']);
+            $replacements['page_content'] = $page_content;
+            logMessage("Page content fetched, length: " . strlen($page_content));
+        } else {
+            $replacements['page_content'] = '';
+        }
+        
         // Zamień zmienne w promptcie generowania
         $generate_prompt = replacePromptPlaceholders($generate_prompt_template, $replacements);
         
@@ -341,6 +373,10 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         try {
             $generated_text = callGeminiAPI($generate_prompt, $api_key);
             logMessage("Content generated successfully for ID {$task_item_id}, length: " . strlen($generated_text));
+            
+            // Loguj prompt generowania do bazy danych
+            logPromptToDatabase($pdo, $task_item_id, 'generate', $generate_prompt, $generated_text);
+            
         } catch (Exception $e) {
             logMessage("Error generating content for ID {$task_item_id}: " . $e->getMessage(), 'error');
             throw $e;

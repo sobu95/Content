@@ -78,7 +78,8 @@ if ($_POST) {
                         
                         <hr>
                         <div class="text-center">
-                            <a href="register.php">Nie masz konta? Zarejestruj się</a>
+                            <a href="register.php">Nie masz konta? Zarejestruj się</a><br>
+                            <a href="forgot_password.php">Zapomniałem hasła</a>
                         </div>
                     </div>
                 </div>

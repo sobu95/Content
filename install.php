@@ -33,6 +33,16 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            token VARCHAR(64) NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_user_reset (user_id)
+        );
+        
         CREATE TABLE IF NOT EXISTS content_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -63,7 +73,7 @@ if ($_POST) {
             project_id INT NOT NULL,
             content_type_id INT NOT NULL,
             name VARCHAR(255) NOT NULL,
-            status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+            status ENUM('pending', 'processing', 'completed', 'failed', 'partial_failure') DEFAULT 'pending',
             strictness_level DECIMAL(2,1) DEFAULT 0.0,
             task_data JSON,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -110,6 +120,16 @@ if ($_POST) {
             processed_at TIMESTAMP NULL,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
         );
+        
+        CREATE TABLE IF NOT EXISTS prompt_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            task_item_id INT NOT NULL,
+            prompt_type ENUM('generate', 'verify') NOT NULL,
+            prompt_content TEXT NOT NULL,
+            api_response TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
+        );
         ";
         
         $pdo->exec($sql);
@@ -122,7 +142,8 @@ if ($_POST) {
             'headings' => ['type' => 'text', 'label' => 'Nagłówki H2 (opcjonalnie)', 'required' => false],
             'characters' => ['type' => 'number', 'label' => 'Przybliżona liczba znaków', 'required' => true],
             'lead' => ['type' => 'checkbox', 'label' => 'Zacząć od leadu', 'required' => false],
-            'internal_linking' => ['type' => 'text', 'label' => 'Linkowanie wewnętrzne (opcjonalnie)', 'required' => false]
+            'internal_linking' => ['type' => 'text', 'label' => 'Linkowanie wewnętrzne (opcjonalnie)', 'required' => false],
+            'page_content' => ['type' => 'checkbox', 'label' => 'Pobierz treść strony', 'required' => false]
         ]);
         $stmt->execute(['Opisy kategorii e-commerce', $default_fields]);
         $content_type_id = $pdo->lastInsertId();
@@ -138,6 +159,7 @@ Approximate Characters: {characters}
 Lead Required: {lead}
 Internal Linking: {internal_linking}
 Strictness Level: {strictness_level}
+Current Page Content: {page_content}
 ++GENERAL INSTRUCTIONS++
 The entire output MUST be in pure HTML. DO NOT use Markdown, code blocks, or any unsupported formatting. No asterisks, no # for headings.
 Use only the following HTML tags: <h2>, <p>, <strong>, <a>.
@@ -192,6 +214,8 @@ Do not use any rhetorical questions addressing the reader directly.
 Focus entirely on describing the category and its features objectively, naturally and fluently.
 Avoid generic filler phrases such as: „w dzisiejszych czasach", "w świecie", „w tym artykule", „jak wspomniano wcześniej", „podsumowując" or similar.
 Use varied sentence lengths and structures ensuring smooth reading flow, fully respecting the Sentence Structure Instructions.
+++CURRENT PAGE CONTENT CONTEXT++
+If Current Page Content is provided, use it as context to understand the current style, tone, and content approach of the page. Reference existing products, categories, or themes mentioned in the current content when relevant, but do not copy or duplicate existing text.
 ++SENTENCE STRUCTURE INSTRUCTIONS++
 Write using natural, fluid Polish sentence structures.
 Combine related ideas into longer, complex, and compound sentences when appropriate.

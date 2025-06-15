@@ -73,7 +73,7 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'remove_from_queue
     }
 }
 
-// Pobierz elementy kolejki dla użytkownika
+// Pobierz elementy kolejki dla użytkownika - sortowanie od najnowszych
 $stmt = $pdo->prepare("
     SELECT tq.*, ti.url, t.name as task_name, p.name as project_name
     FROM task_queue tq
@@ -81,7 +81,7 @@ $stmt = $pdo->prepare("
     JOIN tasks t ON ti.task_id = t.id
     JOIN projects p ON t.project_id = p.id
     WHERE p.user_id = ?
-    ORDER BY tq.priority DESC, tq.created_at ASC
+    ORDER BY tq.created_at DESC, tq.priority DESC
 ");
 $stmt->execute([$_SESSION['user_id']]);
 $queue_items = $stmt->fetchAll();
@@ -116,6 +116,14 @@ foreach ($queue_stats as $stat) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <meta http-equiv="refresh" content="30">
+    <style>
+        .btn-group .btn {
+            margin-right: 10px;
+        }
+        .btn-group .btn:last-child {
+            margin-right: 0;
+        }
+    </style>
 </head>
 <body>
     <?php include 'header.php'; ?>
