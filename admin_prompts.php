@@ -7,16 +7,39 @@ $pdo = getDbConnection();
 $success = '';
 $error = '';
 
+function extractPlaceholders($template) {
+    preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches);
+    return array_unique($matches[1]);
+}
+
 // Obsługa zapisywania promptu
 if ($_POST) {
     $content_type_id = intval($_POST['content_type_id']);
     $type = $_POST['type'];
     $content = trim($_POST['content']);
-    
+
     if (empty($content)) {
         $error = 'Treść promptu jest wymagana.';
     } else {
         try {
+            // Pobierz pola dla typu treści
+            $stmt = $pdo->prepare("SELECT fields FROM content_types WHERE id = ?");
+            $stmt->execute([$content_type_id]);
+            $ct = $stmt->fetch();
+            $fields = $ct ? json_decode($ct['fields'], true) : [];
+
+            $allowed_keys = array_merge(
+                array_keys($fields),
+                ['url','keywords','headings','characters','lead','internal_linking','page_content','strictness_level','generated_text']
+            );
+
+            $placeholders = extractPlaceholders($content);
+            $invalid = array_diff($placeholders, $allowed_keys);
+
+            if (!empty($invalid)) {
+                throw new Exception('Nieznane placeholdery: ' . implode(', ', $invalid));
+            }
+
             // Sprawdź czy prompt już istnieje
             $stmt = $pdo->prepare("SELECT id FROM prompts WHERE content_type_id = ? AND type = ?");
             $stmt->execute([$content_type_id, $type]);
@@ -140,7 +163,8 @@ foreach ($prompts as $prompt) {
                                         {generated_text} - Wygenerowana treść
                                     </div>
                                 </div>
-                                
+                                <div id="placeholder-warning" class="alert alert-warning d-none"></div>
+
                                 <form method="POST">
                                     <div class="mb-3">
                                         <label for="content_type_id" class="form-label">Typ treści *</label>
@@ -258,23 +282,56 @@ foreach ($prompts as $prompt) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const prompts = <?= json_encode($grouped_prompts) ?>;
-        
+        let currentFields = {};
+
         function editPrompt(contentTypeId, type) {
             document.getElementById('content_type_id').value = contentTypeId;
             document.getElementById('type').value = type;
             loadPrompt();
         }
-        
-        function loadPrompt() {
+
+        async function loadPrompt() {
             const contentTypeId = document.getElementById('content_type_id').value;
             const type = document.getElementById('type').value;
-            
+
+            if (contentTypeId) {
+                try {
+                    const response = await fetch('ajax_content_type_fields.php?id=' + contentTypeId);
+                    const data = await response.json();
+                    currentFields = data.fields || {};
+                } catch (e) {
+                    console.error('Error loading fields', e);
+                    currentFields = {};
+                }
+            } else {
+                currentFields = {};
+            }
+
             if (contentTypeId && type && prompts[contentTypeId] && prompts[contentTypeId][type]) {
                 document.getElementById('content').value = prompts[contentTypeId][type].content;
             } else {
                 document.getElementById('content').value = '';
             }
+
+            validatePlaceholders();
         }
+
+        function validatePlaceholders() {
+            const content = document.getElementById('content').value;
+            const matches = Array.from(content.matchAll(/\{([a-zA-Z0-9_]+)\}/g)).map(m => m[1]);
+            const allowed = new Set([...Object.keys(currentFields), 'url','keywords','headings','characters','lead','internal_linking','page_content','strictness_level','generated_text']);
+            const invalid = matches.filter(p => !allowed.has(p));
+            const warnEl = document.getElementById('placeholder-warning');
+            if (invalid.length) {
+                warnEl.textContent = 'Nieznane placeholdery: ' + invalid.join(', ');
+                warnEl.classList.remove('d-none');
+            } else {
+                warnEl.textContent = '';
+                warnEl.classList.add('d-none');
+            }
+        }
+
+        document.getElementById('content').addEventListener('input', validatePlaceholders);
     </script>
 </body>
 </html>
