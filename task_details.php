@@ -261,6 +261,7 @@ $content_type_fields = json_decode($task['fields'], true);
                                                             </button>
                                                         <?php endif; ?>
                                                         <form method="POST" style="display: inline;">
+                                                            <?= csrf_field() ?>
                                                             <input type="hidden" name="action" value="regenerate">
                                                             <input type="hidden" name="task_item_id" value="<?= $item['id'] ?>">
                                                             <button type="submit" class="btn btn-sm btn-outline-warning" 

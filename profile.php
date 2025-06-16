@@ -128,6 +128,8 @@ if ($_POST) {
                             </div>
                             <div class="card-body">
                                 <form method="POST">
+                                    <?= csrf_field() ?>
+                                    <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="change_email">
                                     <div class="mb-3">
                                         <label for="current_email" class="form-label">Obecny email</label>

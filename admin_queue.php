@@ -169,6 +169,7 @@ $queue_items = $stmt->fetchAll();
                     <div class="card-body">
                         <div class="btn-group" role="group">
                             <form method="POST" style="display: inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="clear_completed">
                                 <button type="submit" class="btn btn-outline-success" 
                                         onclick="return confirm('Czy na pewno chcesz usunąć wszystkie ukończone zadania?')">
@@ -177,6 +178,7 @@ $queue_items = $stmt->fetchAll();
                             </form>
                             
                             <form method="POST" style="display: inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="retry_failed">
                                 <button type="submit" class="btn btn-outline-warning" 
                                         onclick="return confirm('Czy na pewno chcesz ponowić wszystkie nieudane zadania?')">
@@ -185,6 +187,7 @@ $queue_items = $stmt->fetchAll();
                             </form>
                             
                             <form method="POST" style="display: inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="clear_failed">
                                 <button type="submit" class="btn btn-outline-danger" 
                                         onclick="return confirm('Czy na pewno chcesz usunąć wszystkie nieudane zadania?')">
@@ -193,6 +196,7 @@ $queue_items = $stmt->fetchAll();
                             </form>
                             
                             <form method="POST" style="display: inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="clear_all">
                                 <button type="submit" class="btn btn-danger" 
                                         onclick="return confirm('UWAGA: To usunie WSZYSTKIE zadania z kolejki! Czy na pewno?')">

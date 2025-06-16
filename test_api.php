@@ -134,6 +134,7 @@ if ($_POST && isset($_POST['test_api'])) {
                             <p>Klucz API jest skonfigurowany. Kliknij poniżej aby przetestować połączenie:</p>
                             
                             <form method="POST">
+                                <?= csrf_field() ?>
                                 <button type="submit" name="test_api" class="btn btn-primary">
                                     <i class="fas fa-play"></i> Testuj API
                                 </button>

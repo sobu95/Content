@@ -166,6 +166,7 @@ foreach ($prompts as $prompt) {
                                 <div id="placeholder-warning" class="alert alert-warning d-none"></div>
 
                                 <form method="POST">
+                                    <?= csrf_field() ?>
                                     <div class="mb-3">
                                         <label for="content_type_id" class="form-label">Typ treści *</label>
                                         <select class="form-select" name="content_type_id" id="content_type_id" required onchange="loadPrompt()">

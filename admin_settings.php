@@ -220,6 +220,7 @@ if (is_dir($log_dir)) {
                             </div>
                             <div class="card-body">
                                 <form method="POST">
+                                    <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="save_settings">
                                     <div class="mb-3">
                                         <label for="gemini_api_key" class="form-label">Klucz API Google Gemini *</label>
@@ -313,6 +314,7 @@ if (is_dir($log_dir)) {
                                         <h6>Pobieranie treści stron</h6>
                                         <p class="text-muted">Uruchom pobieranie treści dla zadań, które nie mają jeszcze pobranej treści strony.</p>
                                         <form method="POST" style="display: inline;">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="process_page_content">
                                             <button type="submit" class="btn btn-info">
                                                 <i class="fas fa-download"></i> Pobierz treści stron (<?= $missing_content_count ?>)
@@ -343,6 +345,7 @@ if (is_dir($log_dir)) {
                                         <h6>Czyszczenie logów</h6>
                                         <p class="text-muted">Usuń wszystkie logi promptów z bazy danych.</p>
                                         <form method="POST" style="display: inline;">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="clear_logs">
                                             <button type="submit" class="btn btn-warning" 
                                                     onclick="return confirm('Czy na pewno chcesz usunąć wszystkie logi promptów?')">
@@ -354,6 +357,7 @@ if (is_dir($log_dir)) {
                                         <h6>Czyszczenie starych zadań</h6>
                                         <p class="text-muted">Usuń zadania starsze niż 30 dni wraz z powiązanymi danymi.</p>
                                         <form method="POST" style="display: inline;">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="clear_old_tasks">
                                             <button type="submit" class="btn btn-danger" 
                                                     onclick="return confirm('Czy na pewno chcesz usunąć wszystkie zadania starsze niż 30 dni?')">

@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'csrf.php';
 
 // Sprawdź czy aplikacja jest już zainstalowana
 if (file_exists('config.php')) {
@@ -9,6 +10,7 @@ if (file_exists('config.php')) {
 
 $error = '';
 $success = '';
+verify_csrf();
 
 if ($_POST) {
     $db_host = $_POST['db_host'];
@@ -389,6 +391,7 @@ function getDbConnection() {
                         <?php else: ?>
                         
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <h5>Konfiguracja bazy danych</h5>
                             <div class="row">
                                 <div class="col-md-6">
