@@ -4,6 +4,10 @@ requireAdmin();
 
 $pdo = getDbConnection();
 
+// Określ ścieżkę bazową dla crona
+// __DIR__ daje /home/goupcomp/domains/goup.com.pl/private_html/content
+$base_cron_path = __DIR__; 
+
 $success = '';
 $error = '';
 
@@ -461,7 +465,7 @@ if (is_dir($log_dir)) {
                             </div>
                         </div>
                         
-                        <div class="card mt-4">
+                                                <div class="card mt-4">
                             <div class="card-header">
                                 <h5 class="mb-0">Zarządzanie kolejką</h5>
                             </div>
@@ -469,17 +473,23 @@ if (is_dir($log_dir)) {
                                 <p class="text-muted">
                                     Aby uruchomić przetwarzanie kolejki, wykonaj poniższą komendę na serwerze:
                                 </p>
-                                <code>php process_queue.php</code>
+                                <pre><code>/usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue.php</code></pre>
                                 
                                 <p class="text-muted mt-3">
-                                    Lub dodaj do cron-a dla automatycznego przetwarzania:
+                                    Lub dodaj do cron-a dla automatycznego przetwarzania (np. co minutę):
                                 </p>
-                                <code>* * * * * php /path/to/process_queue.php</code>
+                                <pre><code>* * * * * /usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue.php >> <?= htmlspecialchars($base_cron_path) ?>/logs/queue_cron.log 2>&1</code></pre>
                                 
                                 <p class="text-muted mt-3">
-                                    Dla pobierania treści stron:
+                                    Dla pobierania treści stron (np. co 5 minut):
                                 </p>
-                                <code>*/5 * * * * php /path/to/process_page_content.php</code>
+                                <pre><code>*/5 * * * * /usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_page_content.php >> <?= htmlspecialchars($base_cron_path) ?>/logs/page_content_cron.log 2>&1</code></pre>
+
+                                <p class="alert alert-info small mt-3">
+                                    Powyższe komendy zakładają, że `php` jest dostępne jako `/usr/bin/php` w środowisku Crona.<br>
+                                    Jeśli napotkasz problemy, spróbuj użyć `which php` na serwerze, aby znaleźć dokładną ścieżkę do interpretera PHP, lub skontaktuj się z administratorem hostingu.<br>
+                                    `>> ... 2>&1` przekierowuje wyjście i błędy do plików logów, co jest bardzo pomocne w debugowaniu Crona.
+                                </p>
                             </div>
                         </div>
                     </div>

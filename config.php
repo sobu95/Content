@@ -1,8 +1,8 @@
 <?php
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'srv35761_contentcenter');
-define('DB_USER', 'srv35761_contentcenter');
-define('DB_PASS', 'srv35761_contentcenter');
+define('DB_NAME', 'goupcomp_content');
+define('DB_USER', 'goupcomp_content');
+define('DB_PASS', 'DkSSXsDjsBeYL9Z7gvJ2');
 
 function getDbConnection() {
     try {
