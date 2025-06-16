@@ -54,22 +54,6 @@ function getGeminiApiKey($pdo) {
     return $result ? $result['setting_value'] : null;
 }
 
-/**
- * Sprawdza czy są zadania do przetworzenia
- */
-function hasQueueItems($pdo) {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*) as count
-        FROM task_queue tq
-        WHERE tq.status = 'pending' 
-        AND tq.attempts < tq.max_attempts
-        AND (tq.attempts > 0 OR tq.created_at <= NOW() - INTERVAL 1 MINUTE)
-    ");
-    $stmt->execute();
-    $result = $stmt->fetch();
-    return $result['count'] > 0;
-}
-
 // Główna logika
 try {
     logMessage("Starting CLI queue processor");

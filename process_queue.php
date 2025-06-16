@@ -427,6 +427,11 @@ updateLastRunTimestamp($pdo);
 $api_key = getGeminiApiKey();
 $processing_delay_minutes = getProcessingDelayMinutes();
 
+if ($is_cli_mode && !hasQueueItems($pdo)) {
+    logMessage("No items in queue to process");
+    exit(0);
+}
+
 if (!$api_key) {
     logMessage("ERROR: Gemini API key not configured in database.", 'error');
     if (!$is_cli_mode) { echo "</div></body></html>"; ob_end_flush(); }
