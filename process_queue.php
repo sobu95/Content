@@ -187,11 +187,24 @@ function callGeminiAPI($prompt, $api_key) {
     
     if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
         $generated_text = $result['candidates'][0]['content']['parts'][0]['text'];
+        $patterns = [
+            '~```html\s*~i',
+            '~```\s*~i'
+        ];
+        $generated_text = preg_replace($patterns, '', $generated_text);
+        $generated_text = trim($generated_text);
         logMessage("Generated text length: " . strlen($generated_text));
         return ['text' => $generated_text, 'full_response' => $response];
     } elseif (isset($result['candidates'][0]['output'])) {
-        logMessage("Generated text found in 'output' field, length: " . strlen($result['candidates'][0]['output']));
-        return ['text' => $result['candidates'][0]['output'], 'full_response' => $response];
+        $generated_text = $result['candidates'][0]['output'];
+        $patterns = [
+            '~```html\s*~i',
+            '~```\s*~i'
+        ];
+        $generated_text = preg_replace($patterns, '', $generated_text);
+        $generated_text = trim($generated_text);
+        logMessage("Generated text found in 'output' field, length: " . strlen($generated_text));
+        return ['text' => $generated_text, 'full_response' => $response];
     } elseif (isset($result['error'])) {
         throw new Exception("API Error from response: " . $result['error']['message'] . " (Code: " . ($result['error']['code'] ?? 'N/A') . ")");
     } else {
@@ -200,21 +213,6 @@ function callGeminiAPI($prompt, $api_key) {
     }
 }
 
-
-  // --- DODAJ TEN FRAGMENT KODU W TYM MIEJSCU ---
-       // Usuń znaczniki kodu Markdown (```html, ```) oraz wszelkie białe znaki wokół nich
-    if ($generated_text !== null) {
-        $patterns = [
-            '~```html\s*~i', // Dopasuj ```html i wszystkie następujące białe znaki (w tym nowe linie)
-            '~```\s*~i'      // Dopasuj ``` i wszystkie następujące białe znaki (w tym nowe linie)
-        ];
-        $generated_text = preg_replace($patterns, '', $generated_text);
-        $generated_text = trim($generated_text); // Usuń wszystkie białe znaki (spacje, tabulatory, nowe linie) z początku i końca stringa
-        logMessage("Generated text length (after cleanup): " . strlen($generated_text));
-    }
-    // --- KONIEC DODAWANEGO FRAGMENTU KODU ---
-
-    
 
 /**
  * Przetwarza pojedynczy element zadania z kolejki.
