@@ -86,15 +86,18 @@ function logPromptToDatabase($pdo, $task_item_id, $prompt_type, $prompt_content,
 /**
  * Bezpiecznie zamienia placeholdery w szablonie promptu.
  */
-function replacePromptPlaceholders($template, $replacements) {
-    $callback = function($matches) use ($replacements) {
+function replacePromptPlaceholders($template, $replacements, $allowMissing = true) {
+    $callback = function($matches) use ($replacements, $allowMissing) {
         $key = $matches[1];
-        if (!isset($replacements[$key])) {
+        if (!array_key_exists($key, $replacements)) {
+            if ($allowMissing) {
+                return '';
+            }
             throw new Exception("Missing replacement for placeholder: '{$key}' in prompt template. Available keys: " . implode(', ', array_keys($replacements)));
         }
         return $replacements[$key];
     };
-    
+
     $processed_prompt = preg_replace_callback('/\{([a-zA-Z0-9_]+)\}/', $callback, $template);
     
     if ($processed_prompt === null) {
