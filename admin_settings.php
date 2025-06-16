@@ -477,12 +477,12 @@ if (is_dir($log_dir)) {
                                 <p class="text-muted">
                                     Aby uruchomić przetwarzanie kolejki, wykonaj poniższą komendę na serwerze:
                                 </p>
-                                <pre><code>/usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue.php</code></pre>
+                                <pre><code>/usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue_cli.php</code></pre>
                                 
                                 <p class="text-muted mt-3">
                                     Lub dodaj do cron-a dla automatycznego przetwarzania (np. co minutę):
                                 </p>
-                                <pre><code>* * * * * /usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue.php >> <?= htmlspecialchars($base_cron_path) ?>/logs/queue_cron.log 2>&1</code></pre>
+                                <pre><code>* * * * * /usr/bin/php <?= htmlspecialchars($base_cron_path) ?>/process_queue_cli.php >> <?= htmlspecialchars($base_cron_path) ?>/logs/queue_cron.log 2>&1</code></pre>
                                 
                                 <p class="text-muted mt-3">
                                     Dla pobierania treści stron (np. co 5 minut):
