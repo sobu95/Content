@@ -394,6 +394,7 @@ foreach ($tasks as &$task) {
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <form method="POST" id="taskForm">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="create_task">
                     <div class="modal-header">
                         <h5 class="modal-title">Nowe zadanie</h5>

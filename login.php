@@ -1,5 +1,7 @@
 <?php
 session_start();
+require_once 'csrf.php';
+
 
 // Sprawdź czy aplikacja jest zainstalowana
 if (!file_exists('config.php')) {
@@ -8,6 +10,7 @@ if (!file_exists('config.php')) {
 }
 
 require_once 'config.php';
+verify_csrf();
 
 // Jeśli użytkownik jest już zalogowany, przekieruj do dashboard
 if (isset($_SESSION['user_id'])) {
@@ -65,6 +68,7 @@ if ($_POST) {
                         <?php endif; ?>
                         
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
                                 <input type="email" class="form-control" id="email" name="email" required>

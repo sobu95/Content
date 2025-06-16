@@ -173,6 +173,7 @@ $content_types = $stmt->fetchAll();
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <form method="POST">
+                    <?= csrf_field() ?>
                     <div class="modal-header">
                         <h5 class="modal-title" id="contentTypeModalTitle">Nowy typ treści</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

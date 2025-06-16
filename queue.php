@@ -266,6 +266,7 @@ foreach ($queue_stats as $stat) {
                                                     <div class="btn-group">
                                                         <?php if ($item['status'] === 'pending' || $item['status'] === 'failed'): ?>
                                                             <form method="POST" style="display: inline;">
+                                                                <?= csrf_field() ?>
                                                                 <input type="hidden" name="action" value="force_generate">
                                                                 <input type="hidden" name="queue_id" value="<?= $item['id'] ?>">
                                                                 <button type="submit" class="btn btn-sm btn-outline-primary" 
@@ -277,6 +278,7 @@ foreach ($queue_stats as $stat) {
                                                         
                                                         <?php if ($item['status'] !== 'completed'): ?>
                                                             <form method="POST" style="display: inline;">
+                                                                <?= csrf_field() ?>
                                                                 <input type="hidden" name="action" value="remove_from_queue">
                                                                 <input type="hidden" name="queue_id" value="<?= $item['id'] ?>">
                                                                 <button type="submit" class="btn btn-sm btn-outline-danger" 

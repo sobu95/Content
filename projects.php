@@ -168,6 +168,7 @@ $projects = $stmt->fetchAll();
         <div class="modal-dialog">
             <div class="modal-content">
                 <form method="POST">
+                    <?= csrf_field() ?>
                     <div class="modal-header">
                         <h5 class="modal-title" id="projectModalTitle">Nowy projekt</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

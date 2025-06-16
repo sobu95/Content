@@ -1,6 +1,8 @@
 <?php
 // Plik sprawdzający autoryzację użytkownika
 session_start();
+require_once 'csrf.php';
+verify_csrf();
 
 if (!file_exists('config.php')) {
     header('Location: install.php');

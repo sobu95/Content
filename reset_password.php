@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'csrf.php';
 
 // Sprawdź czy aplikacja jest zainstalowana
 if (!file_exists('config.php')) {
@@ -8,6 +9,7 @@ if (!file_exists('config.php')) {
 }
 
 require_once 'config.php';
+verify_csrf();
 
 // Jeśli użytkownik jest już zalogowany, przekieruj do dashboard
 if (isset($_SESSION['user_id'])) {
@@ -111,6 +113,7 @@ if ($_POST && $valid_token) {
                         <p class="text-muted">Wprowadź nowe hasło dla swojego konta.</p>
                         
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <div class="mb-3">
                                 <label for="password" class="form-label">Nowe hasło</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
