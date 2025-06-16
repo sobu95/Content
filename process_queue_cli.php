@@ -22,6 +22,7 @@ if (!file_exists($app_root . '/config.php')) {
 }
 
 require_once $app_root . '/config.php';
+require_once $app_root . '/queue_helpers.php';
 
 /**
  * Loguje wiadomość do pliku i konsoli
@@ -42,21 +43,6 @@ function logMessage($message, $type = 'info') {
     file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
 }
 
-/**
- * Zapisuje timestamp ostatniego uruchomienia procesora
- */
-function updateLastRunTimestamp($pdo) {
-    try {
-        $stmt = $pdo->prepare("
-            INSERT INTO settings (setting_key, setting_value) 
-            VALUES ('last_queue_run', NOW()) 
-            ON DUPLICATE KEY UPDATE setting_value = NOW()
-        ");
-        $stmt->execute();
-    } catch (Exception $e) {
-        logMessage("Failed to update last run timestamp: " . $e->getMessage(), 'error');
-    }
-}
 
 /**
  * Pobiera klucz API Gemini

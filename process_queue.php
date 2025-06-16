@@ -4,6 +4,7 @@
 
 require_once 'config.php';
 require_once 'fetch_page_content.php';
+require_once 'queue_helpers.php';
 
 // Zmienna globalna do określania trybu (CLI vs WWW)
 $is_cli_mode = php_sapi_name() === 'cli';
@@ -421,6 +422,7 @@ if (!$is_cli_mode) {
 logMessage("Starting queue processor. Mode: " . ($is_cli_mode ? "CLI" : "WWW (Manual Trigger)"));
 
 $pdo = getDbConnection();
+updateLastRunTimestamp($pdo);
 $api_key = getGeminiApiKey();
 $processing_delay_minutes = getProcessingDelayMinutes();
 
