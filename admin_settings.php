@@ -34,6 +34,43 @@ if ($_POST) {
                 $error = 'Błąd zapisywania ustawień: ' . $e->getMessage();
             }
             break;
+
+        case 'save_model':
+            $model_id = isset($_POST['model_id']) ? intval($_POST['model_id']) : null;
+            $name = trim($_POST['name']);
+            $endpoint = trim($_POST['endpoint']);
+            $max_tokens = intval($_POST['max_output_tokens']);
+            $config = json_encode([
+                'temperature' => floatval($_POST['temperature']),
+                'topK' => intval($_POST['topK']),
+                'topP' => floatval($_POST['topP'])
+            ]);
+
+            try {
+                if ($model_id) {
+                    $stmt = $pdo->prepare("UPDATE language_models SET name=?, endpoint=?, max_output_tokens=?, generation_config=? WHERE id=?");
+                    $stmt->execute([$name, $endpoint, $max_tokens, $config, $model_id]);
+                    $success = 'Model został zaktualizowany.';
+                } else {
+                    $stmt = $pdo->prepare("INSERT INTO language_models (name, endpoint, max_output_tokens, generation_config) VALUES (?, ?, ?, ?)");
+                    $stmt->execute([$name, $endpoint, $max_tokens, $config]);
+                    $success = 'Model został dodany.';
+                }
+            } catch(Exception $e) {
+                $error = 'Błąd zapisu modelu: ' . $e->getMessage();
+            }
+            break;
+
+        case 'delete_model':
+            $model_id = intval($_POST['model_id']);
+            try {
+                $stmt = $pdo->prepare("DELETE FROM language_models WHERE id = ?");
+                $stmt->execute([$model_id]);
+                $success = 'Model został usunięty.';
+            } catch(Exception $e) {
+                $error = 'Błąd usuwania modelu: ' . $e->getMessage();
+            }
+            break;
             
         case 'clear_logs':
             try {
@@ -175,6 +212,10 @@ if (is_dir($log_dir)) {
         }
     }
 }
+
+// Pobierz modele językowe
+$stmt = $pdo->query("SELECT * FROM language_models ORDER BY name");
+$language_models = $stmt->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -245,7 +286,52 @@ if (is_dir($log_dir)) {
                                 </form>
                             </div>
                         </div>
-                        
+
+                        <div class="card mt-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Modele językowe</h5>
+                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modelModal">
+                                    <i class="fas fa-plus"></i> Dodaj model
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Nazwa</th>
+                                                <th>Endpoint</th>
+                                                <th>Maks. tokenów</th>
+                                                <th>Akcje</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($language_models as $lm): ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($lm['name']) ?></td>
+                                                    <td><?= htmlspecialchars($lm['endpoint']) ?></td>
+                                                    <td><?= $lm['max_output_tokens'] ?></td>
+                                                    <td>
+                                                        <div class="btn-group">
+                                                            <button class="btn btn-sm btn-outline-secondary" onclick='editModel(<?= json_encode($lm) ?>)'>
+                                                                <i class="fas fa-edit"></i>
+                                                            </button>
+                                                            <form method="POST" style="display:inline-block;" onsubmit="return confirm('Usunąć model?')">
+                                                                <?= csrf_field() ?>
+                                                                <input type="hidden" name="action" value="delete_model">
+                                                                <input type="hidden" name="model_id" value="<?= $lm['id'] ?>">
+                                                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                                            </form>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Monitoring procesów -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -501,7 +587,79 @@ if (is_dir($log_dir)) {
             </main>
         </div>
     </div>
-    
+
+    <div class="modal fade" id="modelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="save_model">
+                    <input type="hidden" name="model_id" id="model_id" value="">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modelModalTitle">Nowy model</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Nazwa *</label>
+                            <input type="text" class="form-control" name="name" id="model_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Endpoint *</label>
+                            <input type="text" class="form-control" name="endpoint" id="model_endpoint" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Maks. tokenów *</label>
+                            <input type="number" class="form-control" name="max_output_tokens" id="model_tokens" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Temperature</label>
+                            <input type="number" step="0.1" class="form-control" name="temperature" id="model_temperature" value="0.7">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">topK</label>
+                            <input type="number" class="form-control" name="topK" id="model_topK" value="40">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">topP</label>
+                            <input type="number" step="0.01" class="form-control" name="topP" id="model_topP" value="0.95">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                        <button type="submit" class="btn btn-primary">Zapisz</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function editModel(model) {
+            document.getElementById('modelModalTitle').textContent = 'Edytuj model';
+            document.getElementById('model_id').value = model.id;
+            document.getElementById('model_name').value = model.name;
+            document.getElementById('model_endpoint').value = model.endpoint;
+            document.getElementById('model_tokens').value = model.max_output_tokens;
+            const cfg = model.generation_config ? JSON.parse(model.generation_config) : {};
+            document.getElementById('model_temperature').value = cfg.temperature ?? 0.7;
+            document.getElementById('model_topK').value = cfg.topK ?? 40;
+            document.getElementById('model_topP').value = cfg.topP ?? 0.95;
+            var modal = new bootstrap.Modal(document.getElementById('modelModal'));
+            modal.show();
+        }
+
+        document.getElementById('modelModal').addEventListener('hidden.bs.modal', function () {
+            document.getElementById('modelModalTitle').textContent = 'Nowy model';
+            document.getElementById('model_id').value = '';
+            document.getElementById('model_name').value = '';
+            document.getElementById('model_endpoint').value = '';
+            document.getElementById('model_tokens').value = '20000';
+            document.getElementById('model_temperature').value = '0.7';
+            document.getElementById('model_topK').value = '40';
+            document.getElementById('model_topP').value = '0.95';
+        });
+    </script>
 </body>
 </html>

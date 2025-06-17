@@ -51,6 +51,15 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (content_type_id) REFERENCES content_types(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS language_models (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            endpoint VARCHAR(255) NOT NULL,
+            max_output_tokens INT DEFAULT 20000,
+            generation_config JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -65,13 +74,15 @@ if ($_POST) {
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
             content_type_id INT NOT NULL,
+            language_model_id INT DEFAULT NULL,
             name VARCHAR(255) NOT NULL,
             status ENUM('pending', 'processing', 'completed', 'failed', 'partial_failure') DEFAULT 'pending',
             strictness_level DECIMAL(2,1) DEFAULT 0.0,
             task_data JSON,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (content_type_id) REFERENCES content_types(id)
+            FOREIGN KEY (content_type_id) REFERENCES content_types(id),
+            FOREIGN KEY (language_model_id) REFERENCES language_models(id)
         );
         
         CREATE TABLE IF NOT EXISTS task_items (
