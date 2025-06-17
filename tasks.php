@@ -82,6 +82,10 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 $stmt = $pdo->query("SELECT id, name FROM content_types ORDER BY name");
 $content_types = $stmt->fetchAll();
 
+// Pobierz dostępne modele językowe
+$stmt = $pdo->query("SELECT id, name FROM language_models ORDER BY name");
+$language_models = $stmt->fetchAll();
+
 // Pobierz projekty użytkownika
 $stmt = $pdo->prepare("SELECT id, name FROM projects WHERE user_id = ? ORDER BY name");
 $stmt->execute([$_SESSION['user_id']]);
@@ -91,6 +95,7 @@ $user_projects = $stmt->fetchAll();
 if ($_POST && isset($_POST['action']) && $_POST['action'] === 'create_task') {
     $task_project_id = intval($_POST['project_id']);
     $content_type_id = intval($_POST['content_type_id']);
+    $language_model_id = isset($_POST['language_model_id']) ? intval($_POST['language_model_id']) : null;
     $task_name = trim($_POST['task_name']);
     $strictness_level = floatval($_POST['strictness_level']);
     
@@ -112,8 +117,8 @@ if ($_POST && isset($_POST['action']) && $_POST['action'] === 'create_task') {
             $fields = json_decode($content_type['fields'], true);
             
             // Utwórz zadanie
-            $stmt = $pdo->prepare("INSERT INTO tasks (project_id, content_type_id, name, strictness_level) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$task_project_id, $content_type_id, $task_name, $strictness_level]);
+            $stmt = $pdo->prepare("INSERT INTO tasks (project_id, content_type_id, language_model_id, name, strictness_level) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$task_project_id, $content_type_id, $language_model_id, $task_name, $strictness_level]);
             $task_id = $pdo->lastInsertId();
             
             // Sprawdź ile URL-i zostało dodanych
@@ -427,6 +432,19 @@ foreach ($tasks as &$task) {
                                         <option value="">Wybierz typ treści</option>
                                         <?php foreach ($content_types as $type): ?>
                                             <option value="<?= $type['id'] ?>"><?= htmlspecialchars($type['name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="language_model_id" class="form-label">Model językowy *</label>
+                                    <select class="form-select" name="language_model_id" id="language_model_id" required>
+                                        <?php foreach ($language_models as $lm): ?>
+                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['name']) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>

@@ -23,3 +23,11 @@ define('GEMINI_API_KEY', 'your-api-key');
 ```
 
 This file should **not** be committed to version control.
+
+## Managing language models
+
+Administrators can define multiple API endpoints for text generation. Use **Ustawienia** in the admin panel to add, edit or delete models in the *Modele językowe* section. Each model defines the endpoint URL and generation configuration parameters (temperature, topK, topP, max tokens).
+
+When creating a task, choose one of the configured models from the model selector. The queue processor will call the selected endpoint with its configuration.
+
+To quickly verify your setup, open `test_api.php` in the admin area and pick a model to send a sample request.

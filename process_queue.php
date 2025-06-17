@@ -111,8 +111,8 @@ function replacePromptPlaceholders($template, $replacements, $allowMissing = tru
 /**
  * Wywołuje API Gemini.
  */
-function callGeminiAPI($prompt, $api_key) {
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+function callGeminiAPI($prompt, $api_key, $model = null) {
+    $url = $model['endpoint'] ?? "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     
     $data = [
         'contents' => [
@@ -123,10 +123,10 @@ function callGeminiAPI($prompt, $api_key) {
             ]
         ],
         'generationConfig' => [
-            'temperature' => 0.7,
-            'topK' => 40,
-            'topP' => 0.95,
-            'maxOutputTokens' => 20000,
+            'temperature' => $model['config']['temperature'] ?? 0.7,
+            'topK' => $model['config']['topK'] ?? 40,
+            'topP' => $model['config']['topP'] ?? 0.95,
+            'maxOutputTokens' => $model['max_output_tokens'] ?? 20000,
         ],
         'safetySettings' => [
             [
@@ -227,19 +227,28 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     logMessage("Processing task item ID: $task_item_id");
     
     // Pobierz dane zadania
-    $stmt = $pdo->prepare("
-        SELECT ti.*, t.strictness_level, ct.id as content_type_id
-        FROM task_items ti
-        JOIN tasks t ON ti.task_id = t.id
-        JOIN content_types ct ON t.content_type_id = ct.id
-        WHERE ti.id = ?
-    ");
+    $stmt = $pdo->prepare(
+        "SELECT ti.*, t.strictness_level, ct.id as content_type_id,
+                lm.endpoint, lm.max_output_tokens, lm.generation_config
+         FROM task_items ti
+         JOIN tasks t ON ti.task_id = t.id
+         JOIN content_types ct ON t.content_type_id = ct.id
+         LEFT JOIN language_models lm ON t.language_model_id = lm.id
+         WHERE ti.id = ?"
+    );
     $stmt->execute([$task_item_id]);
     $task_item = $stmt->fetch();
-    
+
     if (!$task_item) {
         throw new Exception("Task item not found for ID: $task_item_id");
     }
+
+    // Przygotuj informacje o modelu językowym
+    $model = [
+        'endpoint' => $task_item['endpoint'] ?? null,
+        'max_output_tokens' => $task_item['max_output_tokens'] ?? null,
+        'config' => $task_item['generation_config'] ? json_decode($task_item['generation_config'], true) : []
+    ];
     
     // Sprawdź czy treść strony została pobrana
     if (empty($task_item['page_content'])) {
@@ -289,7 +298,7 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     
     // KROK 1: Wygeneruj treść
     try {
-        $api_result = callGeminiAPI($generate_prompt, $api_key);
+        $api_result = callGeminiAPI($generate_prompt, $api_key, $model);
         $generated_text = $api_result['text'];
         
         // Zapisz log promptu generowania
@@ -309,7 +318,7 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
     
     try {
-        $verify_api_result = callGeminiAPI($verify_prompt, $api_key);
+        $verify_api_result = callGeminiAPI($verify_prompt, $api_key, $model);
         $verified_text = $verify_api_result['text'];
         
         // Zapisz log promptu weryfikacji
