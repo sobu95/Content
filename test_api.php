@@ -13,15 +13,30 @@ $api_key = $result ? $result['setting_value'] : null;
 $test_result = '';
 $error = '';
 
+// Pobierz dostępne modele językowe
+$stmt = $pdo->query("SELECT * FROM language_models ORDER BY name");
+$language_models = $stmt->fetchAll();
+
 if ($_POST && isset($_POST['test_api'])) {
     if (!$api_key) {
         $error = 'Klucz API Gemini nie jest skonfigurowany.';
     } else {
         try {
             $test_prompt = "Napisz krótki test w języku polskim - jedną linijkę tekstu.";
-            
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $api_key;
-            
+
+            $model_id = isset($_POST['model_id']) ? intval($_POST['model_id']) : null;
+            $model = null;
+            if ($model_id) {
+                $stmt = $pdo->prepare("SELECT * FROM language_models WHERE id = ?");
+                $stmt->execute([$model_id]);
+                $model = $stmt->fetch();
+            }
+
+            $endpoint = $model['endpoint'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+            $config = $model && $model['generation_config'] ? json_decode($model['generation_config'], true) : [];
+
+            $url = $endpoint . '?key=' . $api_key;
+
             $data = [
                 'contents' => [
                     [
@@ -31,11 +46,13 @@ if ($_POST && isset($_POST['test_api'])) {
                     ]
                 ],
                 'generationConfig' => [
-                    'temperature' => 0.7,
-                    'maxOutputTokens' => 100,
+                    'temperature' => $config['temperature'] ?? 0.7,
+                    'topK' => $config['topK'] ?? 40,
+                    'topP' => $config['topP'] ?? 0.95,
+                    'maxOutputTokens' => $model['max_output_tokens'] ?? 100,
                 ]
             ];
-            
+
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_POST, 1);
@@ -131,10 +148,18 @@ if ($_POST && isset($_POST['test_api'])) {
                                 <a href="admin_settings.php">Przejdź do ustawień</a> aby go dodać.
                             </div>
                         <?php else: ?>
-                            <p>Klucz API jest skonfigurowany. Kliknij poniżej aby przetestować połączenie:</p>
-                            
+                            <p>Klucz API jest skonfigurowany. Wybierz model i kliknij poniżej aby przetestować połączenie:</p>
+
                             <form method="POST">
                                 <?= csrf_field() ?>
+                                <div class="mb-3">
+                                    <label class="form-label">Model językowy</label>
+                                    <select name="model_id" class="form-select">
+                                        <?php foreach ($language_models as $lm): ?>
+                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                                 <button type="submit" name="test_api" class="btn btn-primary">
                                     <i class="fas fa-play"></i> Testuj API
                                 </button>
