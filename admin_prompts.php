@@ -148,20 +148,7 @@ foreach ($prompts as $prompt) {
                             <div class="card-body">
                                 <div class="placeholder-info">
                                     <h6><i class="fas fa-info-circle"></i> Dostępne placeholdery:</h6>
-                                    <div class="placeholder-list">
-                                        <strong>Dla promptu generowania:</strong><br>
-                                        {url} - Adres URL<br>
-                                        {keywords} - Frazy SEO<br>
-                                        {headings} - Nagłówki H2<br>
-                                        {characters} - Liczba znaków<br>
-                                        {lead} - Czy zacząć od leadu<br>
-                                        {internal_linking} - Linkowanie wewnętrzne<br>
-                                        {page_content} - Treść pobranej strony<br>
-                                        {strictness_level} - Poziom naturalności<br><br>
-                                        
-                                        <strong>Dla promptu weryfikacji:</strong><br>
-                                        {generated_text} - Wygenerowana treść
-                                    </div>
+                                    <div id="placeholder-list" class="placeholder-list"></div>
                                 </div>
                                 <div id="placeholder-warning" class="alert alert-warning d-none"></div>
 
@@ -283,6 +270,7 @@ foreach ($prompts as $prompt) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const prompts = <?= json_encode($grouped_prompts) ?>;
+        const globalPlaceholders = ['url','keywords','headings','characters','lead','internal_linking','page_content','strictness_level','generated_text'];
         let currentFields = {};
 
         function editPrompt(contentTypeId, type) {
@@ -314,13 +302,21 @@ foreach ($prompts as $prompt) {
                 document.getElementById('content').value = '';
             }
 
+            updatePlaceholderList();
             validatePlaceholders();
+        }
+
+        function updatePlaceholderList() {
+            const listEl = document.getElementById('placeholder-list');
+            if (!listEl) return;
+            const placeholders = [...Object.keys(currentFields), ...globalPlaceholders];
+            listEl.innerHTML = placeholders.map(p => `{${p}}`).join('<br>');
         }
 
         function validatePlaceholders() {
             const content = document.getElementById('content').value;
             const matches = Array.from(content.matchAll(/\{([a-zA-Z0-9_]+)\}/g)).map(m => m[1]);
-            const allowed = new Set([...Object.keys(currentFields), 'url','keywords','headings','characters','lead','internal_linking','page_content','strictness_level','generated_text']);
+            const allowed = new Set([...Object.keys(currentFields), ...globalPlaceholders]);
             const invalid = matches.filter(p => !allowed.has(p));
             const warnEl = document.getElementById('placeholder-warning');
             if (invalid.length) {
@@ -333,6 +329,7 @@ foreach ($prompts as $prompt) {
         }
 
         document.getElementById('content').addEventListener('input', validatePlaceholders);
+        updatePlaceholderList();
     </script>
 </body>
 </html>
