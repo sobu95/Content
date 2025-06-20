@@ -112,7 +112,8 @@ function replacePromptPlaceholders($template, $replacements, $allowMissing = tru
  * Wywołuje API Gemini.
  */
 function callGeminiAPI($prompt, $api_key, $model = null) {
-    $url = $model['endpoint'] ?? "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    $slug = $model['model_slug'] ?? 'gemini-1.5-flash';
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$slug}:generateContent";
     
     $data = [
         'contents' => [
@@ -229,11 +230,11 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     // Pobierz dane zadania
     $stmt = $pdo->prepare(
         "SELECT ti.*, t.strictness_level, ct.id as content_type_id,
-                lm.endpoint, lm.max_output_tokens, lm.generation_config
+                am.provider, am.model_slug
          FROM task_items ti
          JOIN tasks t ON ti.task_id = t.id
          JOIN content_types ct ON t.content_type_id = ct.id
-         LEFT JOIN language_models lm ON t.language_model_id = lm.id
+         LEFT JOIN api_models am ON t.model_id = am.id
          WHERE ti.id = ?"
     );
     $stmt->execute([$task_item_id]);
@@ -243,11 +244,12 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         throw new Exception("Task item not found for ID: $task_item_id");
     }
 
-    // Przygotuj informacje o modelu językowym
+    // Przygotuj informacje o modelu
     $model = [
-        'endpoint' => $task_item['endpoint'] ?? null,
-        'max_output_tokens' => $task_item['max_output_tokens'] ?? null,
-        'config' => $task_item['generation_config'] ? json_decode($task_item['generation_config'], true) : []
+        'provider' => $task_item['provider'] ?? 'gemini',
+        'model_slug' => $task_item['model_slug'] ?? 'gemini-1.5-flash',
+        'max_output_tokens' => null,
+        'config' => []
     ];
     
     // Sprawdź czy treść strony została pobrana
