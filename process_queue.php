@@ -312,7 +312,7 @@ function processTaskItem($pdo, $queue_item, $api_keys) {
     
     // Pobierz dane zadania
     $stmt = $pdo->prepare(
-        "SELECT ti.*, t.strictness_level, ct.id as content_type_id,
+        "SELECT ti.*, t.strictness_level, ct.id as content_type_id, ct.requires_verification,
                 am.provider, am.model_slug
          FROM task_items ti
          JOIN tasks t ON ti.task_id = t.id
@@ -360,7 +360,7 @@ function processTaskItem($pdo, $queue_item, $api_keys) {
         throw new Exception("Generate prompt not found for content type ID: " . $task_item['content_type_id']);
     }
     
-    if (!$verify_prompt_template) {
+    if ($task_item['requires_verification'] && !$verify_prompt_template) {
         throw new Exception("Verify prompt not found for content type ID: " . $task_item['content_type_id']);
     }
     
@@ -405,38 +405,44 @@ function processTaskItem($pdo, $queue_item, $api_keys) {
         throw $e;
     }
     
-    // KROK 2: Zweryfikuj treść
-    logMessage("Verifying content for ID {$task_item_id}...");
-    
-    // Przygotuj prompt weryfikacji z wygenerowaną treścią
-    $verify_replacements = ['generated_text' => $generated_text];
-    $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
-    
-    try {
-        if ($provider === 'anthropic') {
-            $verify_api_result = callAnthropicAPI($verify_prompt, $api_key, $model['model_slug']);
-        } else {
-            $verify_api_result = callGeminiAPI($verify_prompt, $api_key, $model);
+    if ($task_item['requires_verification']) {
+        // KROK 2: Zweryfikuj treść
+        logMessage("Verifying content for ID {$task_item_id}...");
+
+        // Przygotuj prompt weryfikacji z wygenerowaną treścią
+        $verify_replacements = ['generated_text' => $generated_text];
+        $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
+
+        try {
+            if ($provider === 'anthropic') {
+                $verify_api_result = callAnthropicAPI($verify_prompt, $api_key, $model['model_slug']);
+            } else {
+                $verify_api_result = callGeminiAPI($verify_prompt, $api_key, $model);
+            }
+            $verified_text = $verify_api_result['text'];
+
+            // Zapisz log promptu weryfikacji
+            logPromptToDatabase($pdo, $task_item_id, 'verify', $verify_prompt, $verify_api_result['full_response']);
+
+            logMessage("Content verified successfully for ID {$task_item_id}, length: " . strlen($verified_text));
+
+            // Sprawdź czy tekst rzeczywiście został zmieniony
+            if (trim($verified_text) === trim($generated_text)) {
+                logMessage("Verification did not change the text for ID {$task_item_id}");
+            } else {
+                logMessage("Text was modified during verification for ID {$task_item_id}");
+            }
+
+        } catch (Exception $e) {
+            logMessage("Error verifying content for ID {$task_item_id}: " . $e->getMessage(), 'error');
+            // W przypadku błędu weryfikacji, użyj oryginalnego tekstu
+            $verified_text = $generated_text;
+            logMessage("Using original generated text as verified text due to verification failure.");
         }
-        $verified_text = $verify_api_result['text'];
-        
-        // Zapisz log promptu weryfikacji
-        logPromptToDatabase($pdo, $task_item_id, 'verify', $verify_prompt, $verify_api_result['full_response']);
-        
-        logMessage("Content verified successfully for ID {$task_item_id}, length: " . strlen($verified_text));
-        
-        // Sprawdź czy tekst rzeczywiście został zmieniony
-        if (trim($verified_text) === trim($generated_text)) {
-            logMessage("Verification did not change the text for ID {$task_item_id}");
-        } else {
-            logMessage("Text was modified during verification for ID {$task_item_id}");
-        }
-        
-    } catch (Exception $e) {
-        logMessage("Error verifying content for ID {$task_item_id}: " . $e->getMessage(), 'error');
-        // W przypadku błędu weryfikacji, użyj oryginalnego tekstu
+    } else {
+        // Verification not required
         $verified_text = $generated_text;
-        logMessage("Using original generated text as verified text due to verification failure.");
+        logMessage("Verification skipped for ID {$task_item_id} (not required)");
     }
     
     // KROK 3: Zapisz oba teksty - UPEWNIJ SIĘ ŻE ZAPISUJEMY WŁAŚCIWE TEKSTY
