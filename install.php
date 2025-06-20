@@ -24,7 +24,7 @@ if ($_POST) {
     
     try {
         // Połącz z bazą danych
-        $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+        $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
         // Utwórz tabele
@@ -35,14 +35,14 @@ if ($_POST) {
             password VARCHAR(255) NOT NULL,
             role ENUM('admin', 'user') DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS content_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             fields JSON NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS prompts (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -51,7 +51,7 @@ if ($_POST) {
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (content_type_id) REFERENCES content_types(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
         CREATE TABLE IF NOT EXISTS language_models (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -60,7 +60,7 @@ if ($_POST) {
             max_output_tokens INT DEFAULT 20000,
             generation_config JSON,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
         CREATE TABLE IF NOT EXISTS api_models (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -68,7 +68,7 @@ if ($_POST) {
             model_slug VARCHAR(255) NOT NULL,
             label VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -77,7 +77,7 @@ if ($_POST) {
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS tasks (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,7 +94,7 @@ if ($_POST) {
             FOREIGN KEY (content_type_id) REFERENCES content_types(id),
             FOREIGN KEY (language_model_id) REFERENCES language_models(id),
             FOREIGN KEY (model_id) REFERENCES api_models(id)
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS task_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,7 +105,7 @@ if ($_POST) {
             status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS generated_content (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,14 +115,14 @@ if ($_POST) {
             status ENUM('generated', 'verified', 'failed') DEFAULT 'generated',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS settings (
             id INT AUTO_INCREMENT PRIMARY KEY,
             setting_key VARCHAR(100) NOT NULL UNIQUE,
             setting_value TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS task_queue (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -135,7 +135,7 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed_at TIMESTAMP NULL,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS prompt_logs (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -145,7 +145,7 @@ if ($_POST) {
             api_response TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS password_resets (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -155,7 +155,7 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             UNIQUE KEY unique_user_reset (user_id)
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
         $pdo->exec($sql);
@@ -373,7 +373,7 @@ define('DB_PASS', '$db_pass');
 
 function getDbConnection() {
     try {
-        \$pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8', DB_USER, DB_PASS);
+        \$pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4', DB_USER, DB_PASS);
         \$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return \$pdo;
     } catch(PDOException \$e) {

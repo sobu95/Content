@@ -45,6 +45,16 @@ Additionally the code relies on these common extensions:
 - `mbstring`
 - `openssl`
 
+## Database character set
+
+New installations use the `utf8mb4` encoding for all tables. If you are
+upgrading from an earlier release, convert your database and tables with:
+
+```sql
+ALTER DATABASE <db_name> CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+ALTER TABLE <table_name> CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
 ## Managing language models
 
 Administrators can define multiple API endpoints for text generation. Use **Ustawienia** in the admin panel to add, edit or delete models in the *Modele językowe* section. Each model defines the endpoint URL and generation configuration parameters (temperature, topK, topP, max tokens).
