@@ -18,12 +18,17 @@ if ($_POST) {
     switch ($action) {
         case 'save_settings':
             $gemini_api_key = trim($_POST['gemini_api_key']);
+            $anthropic_api_key = trim($_POST['anthropic_api_key']);
             $processing_delay = intval($_POST['processing_delay_minutes']);
             
             try {
                 // Zapisz klucz API Gemini
                 $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('gemini_api_key', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
                 $stmt->execute([$gemini_api_key]);
+
+                // Zapisz klucz API Anthropic Claude
+                $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('anthropic_api_key', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+                $stmt->execute([$anthropic_api_key]);
                 
                 // Zapisz opóźnienie przetwarzania
                 $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('processing_delay_minutes', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -265,12 +270,17 @@ $language_models = $stmt->fetchAll();
                                     <input type="hidden" name="action" value="save_settings">
                                     <div class="mb-3">
                                         <label for="gemini_api_key" class="form-label">Klucz API Google Gemini *</label>
-                                        <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" 
+                                        <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key"
                                                value="<?= htmlspecialchars($settings['gemini_api_key'] ?? '') ?>" required>
                                         <div class="form-text">
-                                            Klucz API potrzebny do generowania treści. Możesz go uzyskać w 
+                                            Klucz API potrzebny do generowania treści. Możesz go uzyskać w
                                             <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a>.
                                         </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="anthropic_api_key" class="form-label">Klucz API Anthropic Claude</label>
+                                        <input type="password" class="form-control" id="anthropic_api_key" name="anthropic_api_key"
+                                               value="<?= htmlspecialchars($settings['anthropic_api_key'] ?? '') ?>">
                                     </div>
                                     
                                     <div class="mb-3">

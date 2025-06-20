@@ -10,6 +10,7 @@ Provide them either as environment variables or by creating a `config.local.php`
 - `DB_USER` – database user
 - `DB_PASS` – database password
 - `GEMINI_API_KEY` – API key used for requests to the Google Gemini API
+- `ANTHROPIC_API_KEY` – API key used for Anthropic Claude
 
 Example `config.local.php`:
 
@@ -20,6 +21,7 @@ define('DB_NAME', 'my_db');
 define('DB_USER', 'my_user');
 define('DB_PASS', 'secret');
 define('GEMINI_API_KEY', 'your-api-key');
+define('ANTHROPIC_API_KEY', 'your-anthropic-key');
 ```
 
 This file should **not** be committed to version control.
