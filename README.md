@@ -29,6 +29,22 @@ define('CURL_VERIFY_SSL', false);
 
 This file should **not** be committed to version control.
 
+## PHP extensions
+
+The application requires several standard PHP extensions. The admin settings
+page checks for the following at runtime:
+
+- `pdo`
+- `curl`
+- `zip` *(required for the DOCX export feature)*
+- `json`
+
+Additionally the code relies on these common extensions:
+
+- `dom`
+- `mbstring`
+- `openssl`
+
 ## Managing language models
 
 Administrators can define multiple API endpoints for text generation. Use **Ustawienia** in the admin panel to add, edit or delete models in the *Modele językowe* section. Each model defines the endpoint URL and generation configuration parameters (temperature, topK, topP, max tokens).
