@@ -73,3 +73,17 @@ Administrators can define multiple API endpoints for text generation. Use **Usta
 When creating a task, choose one of the configured models from the model selector. The queue processor will call the selected endpoint with its configuration.
 
 To quickly verify your setup, open `test_api.php` in the admin area and pick a model to send a sample request.
+
+## Cron automation
+
+You can automate queue processing and page content fetching by adding the CLI
+scripts to your system cron table. Replace `/path/to` with the path to this
+project and adjust the `php` binary if necessary:
+
+```cron
+* * * * * /usr/bin/php /path/to/process_queue_cli.php >> /path/to/logs/queue_cron.log 2>&1
+*/5 * * * * /usr/bin/php /path/to/process_page_content.php >> /path/to/logs/page_content_cron.log 2>&1
+```
+
+`process_queue_cli.php` checks whether there are any tasks waiting and exits
+immediately when the queue is empty to minimize server load.
