@@ -4,11 +4,15 @@ requireAdmin();
 
 $pdo = getDbConnection();
 
-// Pobierz klucz API
-$stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'gemini_api_key'");
+// Pobierz klucze API
+$stmt = $pdo->prepare("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('gemini_api_key','anthropic_api_key')");
 $stmt->execute();
-$result = $stmt->fetch();
-$api_key = $result ? $result['setting_value'] : null;
+$api_keys = [];
+foreach ($stmt->fetchAll() as $row) {
+    $api_keys[$row['setting_key']] = $row['setting_value'];
+}
+$gemini_api_key = $api_keys['gemini_api_key'] ?? null;
+$anthropic_api_key = $api_keys['anthropic_api_key'] ?? null;
 
 $test_result = '';
 $error = '';
@@ -18,8 +22,11 @@ $stmt = $pdo->query("SELECT * FROM api_models ORDER BY label");
 $language_models = $stmt->fetchAll();
 
 if ($_POST && isset($_POST['test_api'])) {
+    $provider = $_POST['provider'] ?? 'gemini';
+    $api_key = $provider === 'anthropic' ? $anthropic_api_key : $gemini_api_key;
+
     if (!$api_key) {
-        $error = 'Klucz API Gemini nie jest skonfigurowany.';
+        $error = 'Klucz API ' . ucfirst($provider) . ' nie jest skonfigurowany.';
     } else {
         try {
             $test_prompt = "Napisz krótki test w języku polskim - jedną linijkę tekstu.";
@@ -32,36 +39,40 @@ if ($_POST && isset($_POST['test_api'])) {
                 $model = $stmt->fetch();
             }
 
-            $slug = $model['model_slug'] ?? 'gemini-1.5-flash';
-            $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$slug}:generateContent";
-            $config = [];
-
-            $url = $endpoint . '?key=' . $api_key;
-
-            $data = [
-                'contents' => [
-                    [
-                        'parts' => [
-                            ['text' => $test_prompt]
-                        ]
+            if ($provider === 'anthropic') {
+                $slug = $model['model_slug'] ?? 'claude-3-haiku-20240307';
+                $url = 'https://api.anthropic.com/v1/messages';
+                $data = [
+                    'model' => $slug,
+                    'messages' => [ ['role' => 'user', 'content' => $test_prompt] ],
+                    'max_tokens' => 100,
+                    'temperature' => 0.7
+                ];
+                $headers = [
+                    'Content-Type: application/json',
+                    'x-api-key: ' . $api_key,
+                    'anthropic-version: 2023-06-01'
+                ];
+            } else {
+                $slug = $model['model_slug'] ?? 'gemini-1.5-flash';
+                $url = "https://generativelanguage.googleapis.com/v1beta/models/{$slug}:generateContent?key=" . $api_key;
+                $data = [
+                    'contents' => [[ 'parts' => [['text' => $test_prompt]] ]],
+                    'generationConfig' => [
+                        'temperature' => 0.7,
+                        'topK' => 40,
+                        'topP' => 0.95,
+                        'maxOutputTokens' => 100,
                     ]
-                ],
-                'generationConfig' => [
-                    'temperature' => $config['temperature'] ?? 0.7,
-                    'topK' => $config['topK'] ?? 40,
-                    'topP' => $config['topP'] ?? 0.95,
-                    'maxOutputTokens' => $model['max_output_tokens'] ?? 100,
-                ]
-            ];
+                ];
+                $headers = [ 'Content-Type: application/json' ];
+            }
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
+            $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json'
-            ]);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             
@@ -84,12 +95,22 @@ if ($_POST && isset($_POST['test_api'])) {
                 throw new Exception("Invalid JSON response: " . json_last_error_msg());
             }
             
-            if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
-                $test_result = $result['candidates'][0]['content']['parts'][0]['text'];
-            } elseif (isset($result['error'])) {
-                throw new Exception("API Error: " . $result['error']['message']);
+            if ($provider === 'anthropic') {
+                if (isset($result['content'][0]['text'])) {
+                    $test_result = $result['content'][0]['text'];
+                } elseif (isset($result['error'])) {
+                    throw new Exception("API Error: " . $result['error']['message']);
+                } else {
+                    throw new Exception("Unexpected response format: " . json_encode($result));
+                }
             } else {
-                throw new Exception("Unexpected response format: " . json_encode($result));
+                if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+                    $test_result = $result['candidates'][0]['content']['parts'][0]['text'];
+                } elseif (isset($result['error'])) {
+                    throw new Exception("API Error: " . $result['error']['message']);
+                } else {
+                    throw new Exception("Unexpected response format: " . json_encode($result));
+                }
             }
             
         } catch (Exception $e) {
@@ -104,7 +125,7 @@ if ($_POST && isset($_POST['test_api'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test API Gemini - Generator treści SEO</title>
+    <title>Test API - Generator treści SEO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -117,7 +138,7 @@ if ($_POST && isset($_POST['test_api'])) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">Test API Gemini</h1>
+                    <h1 class="h2">Test API</h1>
                 </div>
                 
                 <?php if ($error): ?>
@@ -139,25 +160,25 @@ if ($_POST && isset($_POST['test_api'])) {
                 
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Test połączenia z API Gemini</h5>
+                        <h5 class="mb-0">Test połączenia z API</h5>
                     </div>
                     <div class="card-body">
-                        <?php if (!$api_key): ?>
-                            <div class="alert alert-warning">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                Klucz API Gemini nie jest skonfigurowany. 
-                                <a href="admin_settings.php">Przejdź do ustawień</a> aby go dodać.
-                            </div>
-                        <?php else: ?>
-                            <p>Klucz API jest skonfigurowany. Wybierz model i kliknij poniżej aby przetestować połączenie:</p>
+                        <p>Wybierz dostawcę i model, aby przetestować połączenie:</p>
 
                             <form method="POST">
                                 <?= csrf_field() ?>
                                 <div class="mb-3">
+                                    <label class="form-label">Provider</label>
+                                    <select name="provider" class="form-select">
+                                        <option value="gemini">Gemini<?= $gemini_api_key ? '' : ' (brak klucza)' ?></option>
+                                        <option value="anthropic">Anthropic<?= $anthropic_api_key ? '' : ' (brak klucza)' ?></option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
                                     <label class="form-label">Model API</label>
                                     <select name="model_id" class="form-select">
                                         <?php foreach ($language_models as $lm): ?>
-                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['label']) ?></option>
+                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['label']) ?> (<?= htmlspecialchars($lm['provider']) ?>)</option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -165,7 +186,6 @@ if ($_POST && isset($_POST['test_api'])) {
                                     <i class="fas fa-play"></i> Testuj API
                                 </button>
                             </form>
-                        <?php endif; ?>
                     </div>
                 </div>
                 

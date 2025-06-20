@@ -54,6 +54,16 @@ function getGeminiApiKey($pdo) {
     return $result ? $result['setting_value'] : null;
 }
 
+/**
+ * Pobiera klucz API Anthropic
+ */
+function getAnthropicApiKey($pdo) {
+    $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'anthropic_api_key'");
+    $stmt->execute();
+    $result = $stmt->fetch();
+    return $result ? $result['setting_value'] : null;
+}
+
 // Główna logika
 try {
     logMessage("Starting CLI queue processor");
@@ -61,9 +71,10 @@ try {
     $pdo = getDbConnection();
     updateLastRunTimestamp($pdo);
     
-    $api_key = getGeminiApiKey($pdo);
-    if (!$api_key) {
-        logMessage("ERROR: Gemini API key not configured", 'error');
+    $gemini_key = getGeminiApiKey($pdo);
+    $anthropic_key = getAnthropicApiKey($pdo);
+    if (!$gemini_key && !$anthropic_key) {
+        logMessage("ERROR: No API keys configured", 'error');
         exit(1);
     }
     
