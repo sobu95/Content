@@ -25,6 +25,23 @@ if (!defined('GEMINI_API_KEY')) {
     }
 }
 
+// Whether cURL requests should verify SSL certificates.
+// Defaults to true for security. Set to false in `config.local.php` or via the
+// `CURL_VERIFY_SSL` environment variable if you need to bypass verification
+// during local development.
+if (!defined('CURL_VERIFY_SSL')) {
+    $verify = getenv('CURL_VERIFY_SSL');
+    if ($verify === false) {
+        $verify = true; // secure default
+    } else {
+        $verify = filter_var($verify, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($verify === null) {
+            $verify = true;
+        }
+    }
+    define('CURL_VERIFY_SSL', $verify);
+}
+
 function getDbConnection() {
     try {
         $pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8', DB_USER, DB_PASS);
