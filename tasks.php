@@ -223,6 +223,8 @@ foreach ($tasks as &$task) {
         $task['status'] = $new_status;
     }
 }
+// Clear reference to avoid accidental modification in later loops
+unset($task);
 ?>
 
 <!DOCTYPE html>
