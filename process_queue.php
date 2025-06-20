@@ -58,6 +58,17 @@ function getGeminiApiKey() {
 }
 
 /**
+ * Pobiera klucz API Anthropic z ustawień bazy danych.
+ */
+function getAnthropicApiKey() {
+    $pdo = getDbConnection();
+    $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = 'anthropic_api_key'");
+    $stmt->execute();
+    $result = $stmt->fetch();
+    return $result ? $result['setting_value'] : null;
+}
+
+/**
  * Pobiera opóźnienie w minutach przed pierwszą próbą przetwarzania zadania.
  */
 function getProcessingDelayMinutes() {
@@ -111,8 +122,9 @@ function replacePromptPlaceholders($template, $replacements, $allowMissing = tru
 /**
  * Wywołuje API Gemini.
  */
-function callGeminiAPI($prompt, $api_key) {
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+function callGeminiAPI($prompt, $api_key, $model = null) {
+    $slug = $model['model_slug'] ?? 'gemini-1.5-flash';
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$slug}:generateContent";
     
     $data = [
         'contents' => [
@@ -123,10 +135,10 @@ function callGeminiAPI($prompt, $api_key) {
             ]
         ],
         'generationConfig' => [
-            'temperature' => 0.7,
-            'topK' => 40,
-            'topP' => 0.95,
-            'maxOutputTokens' => 20000,
+            'temperature' => $model['config']['temperature'] ?? 0.7,
+            'topK' => $model['config']['topK'] ?? 40,
+            'topP' => $model['config']['topP'] ?? 0.95,
+            'maxOutputTokens' => $model['max_output_tokens'] ?? 20000,
         ],
         'safetySettings' => [
             [
@@ -217,29 +229,111 @@ function callGeminiAPI($prompt, $api_key) {
     }
 }
 
+/**
+ * Wywołuje API Anthropic Claude.
+ */
+function callAnthropicAPI($prompt, $apiKey, $modelSlug = 'claude-3-haiku-20240307') {
+    $url = 'https://api.anthropic.com/v1/messages';
+
+    $data = [
+        'model' => $modelSlug,
+        'messages' => [
+            [
+                'role' => 'user',
+                'content' => $prompt
+            ]
+        ],
+        'max_tokens' => 2000,
+        'temperature' => 0.7
+    ];
+
+    logMessage("Calling Anthropic API with prompt length: " . strlen($prompt));
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'x-api-key: ' . $apiKey,
+        'anthropic-version: 2023-06-01'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'SEO Content Generator/1.0');
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    $curl_errno = curl_errno($ch);
+    curl_close($ch);
+
+    logMessage("API Response HTTP Code: $http_code");
+
+    if ($curl_error) {
+        throw new Exception("cURL Error ({$curl_errno}): {$curl_error}");
+    }
+
+    if ($http_code !== 200) {
+        $error_details = json_decode($response, true);
+        $error_message = isset($error_details['error']['message']) ? $error_details['error']['message'] : $response;
+        logMessage("API Error Details: " . $error_message);
+        throw new Exception("API Error: HTTP $http_code - " . $error_message);
+    }
+
+    $result = json_decode($response, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new Exception("Invalid JSON response from API: " . json_last_error_msg());
+    }
+
+    if (isset($result['content'][0]['text'])) {
+        $generated_text = trim($result['content'][0]['text']);
+        logMessage("Generated text length: " . strlen($generated_text));
+        return ['text' => $generated_text, 'full_response' => $response];
+    } elseif (isset($result['error'])) {
+        throw new Exception("API Error from response: " . $result['error']['message']);
+    } else {
+        logMessage("Unexpected API response format: " . json_encode($result));
+        throw new Exception("Invalid API response format - no text content found");
+    }
+}
+
 
 /**
  * Przetwarza pojedynczy element zadania z kolejki.
  */
-function processTaskItem($pdo, $queue_item, $api_key) {
+function processTaskItem($pdo, $queue_item, $api_keys) {
     $task_item_id = $queue_item['task_item_id'];
     
     logMessage("Processing task item ID: $task_item_id");
     
     // Pobierz dane zadania
-    $stmt = $pdo->prepare("
-        SELECT ti.*, t.strictness_level, ct.id as content_type_id
-        FROM task_items ti
-        JOIN tasks t ON ti.task_id = t.id
-        JOIN content_types ct ON t.content_type_id = ct.id
-        WHERE ti.id = ?
-    ");
+    $stmt = $pdo->prepare(
+        "SELECT ti.*, t.strictness_level, ct.id as content_type_id, ct.requires_verification,
+                am.provider, am.model_slug
+         FROM task_items ti
+         JOIN tasks t ON ti.task_id = t.id
+         JOIN content_types ct ON t.content_type_id = ct.id
+         LEFT JOIN api_models am ON t.model_id = am.id
+         WHERE ti.id = ?"
+    );
     $stmt->execute([$task_item_id]);
     $task_item = $stmt->fetch();
-    
+
     if (!$task_item) {
         throw new Exception("Task item not found for ID: $task_item_id");
     }
+
+    // Przygotuj informacje o modelu
+    $model = [
+        'provider' => $task_item['provider'] ?? 'gemini',
+        'model_slug' => $task_item['model_slug'] ?? 'gemini-1.5-flash',
+        'max_output_tokens' => null,
+        'config' => []
+    ];
     
     // Sprawdź czy treść strony została pobrana
     if (empty($task_item['page_content'])) {
@@ -266,7 +360,7 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         throw new Exception("Generate prompt not found for content type ID: " . $task_item['content_type_id']);
     }
     
-    if (!$verify_prompt_template) {
+    if ($task_item['requires_verification'] && !$verify_prompt_template) {
         throw new Exception("Verify prompt not found for content type ID: " . $task_item['content_type_id']);
     }
     
@@ -286,10 +380,20 @@ function processTaskItem($pdo, $queue_item, $api_key) {
     $generate_prompt = replacePromptPlaceholders($generate_prompt_template, $replacements);
     
     logMessage("Final generate prompt length: " . strlen($generate_prompt));
-    
+
+    $provider = $model['provider'] ?? 'gemini';
+    $api_key = $api_keys[$provider] ?? null;
+    if (!$api_key) {
+        throw new Exception("API key for provider '{$provider}' is not configured.");
+    }
+
     // KROK 1: Wygeneruj treść
     try {
-        $api_result = callGeminiAPI($generate_prompt, $api_key);
+        if ($provider === 'anthropic') {
+            $api_result = callAnthropicAPI($generate_prompt, $api_key, $model['model_slug']);
+        } else {
+            $api_result = callGeminiAPI($generate_prompt, $api_key, $model);
+        }
         $generated_text = $api_result['text'];
         
         // Zapisz log promptu generowania
@@ -301,34 +405,44 @@ function processTaskItem($pdo, $queue_item, $api_key) {
         throw $e;
     }
     
-    // KROK 2: Zweryfikuj treść
-    logMessage("Verifying content for ID {$task_item_id}...");
-    
-    // Przygotuj prompt weryfikacji z wygenerowaną treścią
-    $verify_replacements = ['generated_text' => $generated_text];
-    $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
-    
-    try {
-        $verify_api_result = callGeminiAPI($verify_prompt, $api_key);
-        $verified_text = $verify_api_result['text'];
-        
-        // Zapisz log promptu weryfikacji
-        logPromptToDatabase($pdo, $task_item_id, 'verify', $verify_prompt, $verify_api_result['full_response']);
-        
-        logMessage("Content verified successfully for ID {$task_item_id}, length: " . strlen($verified_text));
-        
-        // Sprawdź czy tekst rzeczywiście został zmieniony
-        if (trim($verified_text) === trim($generated_text)) {
-            logMessage("Verification did not change the text for ID {$task_item_id}");
-        } else {
-            logMessage("Text was modified during verification for ID {$task_item_id}");
+    if ($task_item['requires_verification']) {
+        // KROK 2: Zweryfikuj treść
+        logMessage("Verifying content for ID {$task_item_id}...");
+
+        // Przygotuj prompt weryfikacji z wygenerowaną treścią
+        $verify_replacements = ['generated_text' => $generated_text];
+        $verify_prompt = replacePromptPlaceholders($verify_prompt_template, $verify_replacements);
+
+        try {
+            if ($provider === 'anthropic') {
+                $verify_api_result = callAnthropicAPI($verify_prompt, $api_key, $model['model_slug']);
+            } else {
+                $verify_api_result = callGeminiAPI($verify_prompt, $api_key, $model);
+            }
+            $verified_text = $verify_api_result['text'];
+
+            // Zapisz log promptu weryfikacji
+            logPromptToDatabase($pdo, $task_item_id, 'verify', $verify_prompt, $verify_api_result['full_response']);
+
+            logMessage("Content verified successfully for ID {$task_item_id}, length: " . strlen($verified_text));
+
+            // Sprawdź czy tekst rzeczywiście został zmieniony
+            if (trim($verified_text) === trim($generated_text)) {
+                logMessage("Verification did not change the text for ID {$task_item_id}");
+            } else {
+                logMessage("Text was modified during verification for ID {$task_item_id}");
+            }
+
+        } catch (Exception $e) {
+            logMessage("Error verifying content for ID {$task_item_id}: " . $e->getMessage(), 'error');
+            // W przypadku błędu weryfikacji, użyj oryginalnego tekstu
+            $verified_text = $generated_text;
+            logMessage("Using original generated text as verified text due to verification failure.");
         }
-        
-    } catch (Exception $e) {
-        logMessage("Error verifying content for ID {$task_item_id}: " . $e->getMessage(), 'error');
-        // W przypadku błędu weryfikacji, użyj oryginalnego tekstu
+    } else {
+        // Verification not required
         $verified_text = $generated_text;
-        logMessage("Using original generated text as verified text due to verification failure.");
+        logMessage("Verification skipped for ID {$task_item_id} (not required)");
     }
     
     // KROK 3: Zapisz oba teksty - UPEWNIJ SIĘ ŻE ZAPISUJEMY WŁAŚCIWE TEKSTY
@@ -424,7 +538,9 @@ logMessage("Starting queue processor. Mode: " . ($is_cli_mode ? "CLI" : "WWW (Ma
 
 $pdo = getDbConnection();
 updateLastRunTimestamp($pdo);
-$api_key = getGeminiApiKey();
+$gemini_api_key = getGeminiApiKey();
+$anthropic_api_key = getAnthropicApiKey();
+$api_keys = ['gemini' => $gemini_api_key, 'anthropic' => $anthropic_api_key];
 $processing_delay_minutes = getProcessingDelayMinutes();
 
 if ($is_cli_mode && !hasQueueItems($pdo)) {
@@ -432,13 +548,13 @@ if ($is_cli_mode && !hasQueueItems($pdo)) {
     exit(0);
 }
 
-if (!$api_key) {
-    logMessage("ERROR: Gemini API key not configured in database.", 'error');
+if (!$gemini_api_key && !$anthropic_api_key) {
+    logMessage("ERROR: No API keys configured in database.", 'error');
     if (!$is_cli_mode) { echo "</div></body></html>"; ob_end_flush(); }
     exit(1);
 }
 
-logMessage("API key configured. Processing delay set to: {$processing_delay_minutes} minutes.");
+logMessage("API keys loaded. Processing delay set to: {$processing_delay_minutes} minutes.");
 logMessage(($is_cli_mode ? "Starting continuous processing loop." : "Processing one item."));
 
 // Ustawienie PDO na tryb rzucania wyjątków
@@ -491,7 +607,7 @@ do {
             // Rozpocznij nową transakcję dla przetwarzania
             $pdo->beginTransaction();
             
-            processTaskItem($pdo, $queue_item, $api_key);
+            processTaskItem($pdo, $queue_item, $api_keys);
             
             // Oznacz element kolejki jako ukończony
             $stmt = $pdo->prepare("UPDATE task_queue SET status = 'completed' WHERE id = ?");

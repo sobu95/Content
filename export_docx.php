@@ -302,12 +302,14 @@ $document_content .= '</w:body></w:document>';
 
 file_put_contents($temp_dir . '/word/document.xml', $document_content);
 
-// Utwórz archiwum ZIP
+// Utwórz archiwum DOCX
 $zip = new ZipArchive();
-$zip_filename = $temp_dir . '.zip';
+$docx_filename = $temp_dir . '.docx';
 
-if ($zip->open($zip_filename, ZipArchive::CREATE) !== TRUE) {
-    die('Cannot create ZIP file');
+if ($zip->open($docx_filename, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+    http_response_code(500);
+    deleteDirectory($temp_dir);
+    exit('Failed to create DOCX file');
 }
 
 // Dodaj pliki do archiwum
@@ -327,7 +329,7 @@ foreach ($files as $name => $file) {
 $zip->close();
 
 // Wyślij plik
-readfile($zip_filename);
+readfile($docx_filename);
 
 // Usuń tymczasowe pliki
 function deleteDirectory($dir) {
@@ -345,7 +347,7 @@ function deleteDirectory($dir) {
 }
 
 deleteDirectory($temp_dir);
-unlink($zip_filename);
+unlink($docx_filename);
 
 // Zakończ buforowanie
 ob_end_flush();

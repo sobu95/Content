@@ -20,10 +20,11 @@ if ($_POST) {
     $admin_email = $_POST['admin_email'];
     $admin_password = $_POST['admin_password'];
     $gemini_api_key = trim($_POST['gemini_api_key']);
+    $anthropic_api_key = trim($_POST['anthropic_api_key']);
     
     try {
         // Połącz z bazą danych
-        $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+        $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
         // Utwórz tabele
@@ -34,14 +35,15 @@ if ($_POST) {
             password VARCHAR(255) NOT NULL,
             role ENUM('admin', 'user') DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS content_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             fields LONGTEXT NOT NULL,
+            requires_verification TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS prompts (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -50,7 +52,24 @@ if ($_POST) {
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (content_type_id) REFERENCES content_types(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS language_models (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            endpoint VARCHAR(255) NOT NULL,
+            max_output_tokens INT DEFAULT 20000,
+            generation_config JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS api_models (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            provider ENUM('gemini','anthropic') NOT NULL,
+            model_slug VARCHAR(255) NOT NULL,
+            label VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -59,20 +78,24 @@ if ($_POST) {
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS tasks (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
             content_type_id INT NOT NULL,
+            language_model_id INT DEFAULT NULL,
+            model_id INT DEFAULT NULL,
             name VARCHAR(255) NOT NULL,
             status ENUM('pending', 'processing', 'completed', 'failed', 'partial_failure') DEFAULT 'pending',
             strictness_level DECIMAL(2,1) DEFAULT 0.0,
             task_data LONGTEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (content_type_id) REFERENCES content_types(id)
-        );
+            FOREIGN KEY (content_type_id) REFERENCES content_types(id),
+            FOREIGN KEY (language_model_id) REFERENCES language_models(id),
+            FOREIGN KEY (model_id) REFERENCES api_models(id)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS task_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -83,7 +106,7 @@ if ($_POST) {
             status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS generated_content (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,14 +116,14 @@ if ($_POST) {
             status ENUM('generated', 'verified', 'failed') DEFAULT 'generated',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS settings (
             id INT AUTO_INCREMENT PRIMARY KEY,
             setting_key VARCHAR(100) NOT NULL UNIQUE,
             setting_value TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS task_queue (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -113,7 +136,7 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             processed_at TIMESTAMP NULL,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS prompt_logs (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -123,7 +146,7 @@ if ($_POST) {
             api_response TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_item_id) REFERENCES task_items(id) ON DELETE CASCADE
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
         CREATE TABLE IF NOT EXISTS password_resets (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -133,13 +156,13 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             UNIQUE KEY unique_user_reset (user_id)
-        );
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
         $pdo->exec($sql);
         
         // Dodaj domyślny typ treści
-        $stmt = $pdo->prepare("INSERT INTO content_types (name, fields) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO content_types (name, fields, requires_verification) VALUES (?, ?, 1)");
         $default_fields = json_encode([
             'url' => ['type' => 'url', 'label' => 'Adres URL', 'required' => true],
             'keywords' => ['type' => 'textarea', 'label' => 'Frazy SEO', 'required' => true],
@@ -331,6 +354,12 @@ Usuń wszystkie znaki nowej linii (\n, \n\n).';
             $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('gemini_api_key', ?)");
             $stmt->execute([$gemini_api_key]);
         }
+
+        // Zapisz klucz API Anthropic Claude
+        if (!empty($anthropic_api_key)) {
+            $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('anthropic_api_key', ?)");
+            $stmt->execute([$anthropic_api_key]);
+        }
         
         // Dodaj domyślne ustawienia
         $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('processing_delay_minutes', '1')");
@@ -345,7 +374,7 @@ define('DB_PASS', '$db_pass');
 
 function getDbConnection() {
     try {
-        \$pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8', DB_USER, DB_PASS);
+        \$pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4', DB_USER, DB_PASS);
         \$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return \$pdo;
     } catch(PDOException \$e) {
@@ -447,10 +476,14 @@ function getDbConnection() {
                                 <label for="gemini_api_key" class="form-label">Klucz API Google Gemini</label>
                                 <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key">
                                 <div class="form-text">
-                                    Klucz API potrzebny do generowania treści. Możesz go uzyskać w 
+                                    Klucz API potrzebny do generowania treści. Możesz go uzyskać w
                                     <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a>.
                                     Możesz też dodać go później w ustawieniach.
                                 </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="anthropic_api_key" class="form-label">Klucz API Anthropic Claude</label>
+                                <input type="password" class="form-control" id="anthropic_api_key" name="anthropic_api_key">
                             </div>
                             
                             <button type="submit" class="btn btn-primary">Zainstaluj</button>
