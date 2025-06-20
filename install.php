@@ -60,6 +60,14 @@ if ($_POST) {
             generation_config JSON,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS api_models (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            provider ENUM('gemini','anthropic') NOT NULL,
+            model_slug VARCHAR(255) NOT NULL,
+            label VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -75,6 +83,7 @@ if ($_POST) {
             project_id INT NOT NULL,
             content_type_id INT NOT NULL,
             language_model_id INT DEFAULT NULL,
+            model_id INT DEFAULT NULL,
             name VARCHAR(255) NOT NULL,
             status ENUM('pending', 'processing', 'completed', 'failed', 'partial_failure') DEFAULT 'pending',
             strictness_level DECIMAL(2,1) DEFAULT 0.0,
@@ -82,7 +91,8 @@ if ($_POST) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             FOREIGN KEY (content_type_id) REFERENCES content_types(id),
-            FOREIGN KEY (language_model_id) REFERENCES language_models(id)
+            FOREIGN KEY (language_model_id) REFERENCES language_models(id),
+            FOREIGN KEY (model_id) REFERENCES api_models(id)
         );
         
         CREATE TABLE IF NOT EXISTS task_items (

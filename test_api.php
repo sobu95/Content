@@ -13,8 +13,8 @@ $api_key = $result ? $result['setting_value'] : null;
 $test_result = '';
 $error = '';
 
-// Pobierz dostępne modele językowe
-$stmt = $pdo->query("SELECT * FROM language_models ORDER BY name");
+// Pobierz dostępne modele API
+$stmt = $pdo->query("SELECT * FROM api_models ORDER BY label");
 $language_models = $stmt->fetchAll();
 
 if ($_POST && isset($_POST['test_api'])) {
@@ -27,13 +27,14 @@ if ($_POST && isset($_POST['test_api'])) {
             $model_id = isset($_POST['model_id']) ? intval($_POST['model_id']) : null;
             $model = null;
             if ($model_id) {
-                $stmt = $pdo->prepare("SELECT * FROM language_models WHERE id = ?");
+                $stmt = $pdo->prepare("SELECT * FROM api_models WHERE id = ?");
                 $stmt->execute([$model_id]);
                 $model = $stmt->fetch();
             }
 
-            $endpoint = $model['endpoint'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-            $config = $model && $model['generation_config'] ? json_decode($model['generation_config'], true) : [];
+            $slug = $model['model_slug'] ?? 'gemini-1.5-flash';
+            $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$slug}:generateContent";
+            $config = [];
 
             $url = $endpoint . '?key=' . $api_key;
 
@@ -153,10 +154,10 @@ if ($_POST && isset($_POST['test_api'])) {
                             <form method="POST">
                                 <?= csrf_field() ?>
                                 <div class="mb-3">
-                                    <label class="form-label">Model językowy</label>
+                                    <label class="form-label">Model API</label>
                                     <select name="model_id" class="form-select">
                                         <?php foreach ($language_models as $lm): ?>
-                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['name']) ?></option>
+                                            <option value="<?= $lm['id'] ?>"><?= htmlspecialchars($lm['label']) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
