@@ -20,6 +20,7 @@ if ($_POST) {
     $admin_email = $_POST['admin_email'];
     $admin_password = $_POST['admin_password'];
     $gemini_api_key = trim($_POST['gemini_api_key']);
+    $anthropic_api_key = trim($_POST['anthropic_api_key']);
     
     try {
         // Połącz z bazą danych
@@ -342,6 +343,12 @@ Usuń wszystkie znaki nowej linii (\n, \n\n).';
             $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('gemini_api_key', ?)");
             $stmt->execute([$gemini_api_key]);
         }
+
+        // Zapisz klucz API Anthropic Claude
+        if (!empty($anthropic_api_key)) {
+            $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('anthropic_api_key', ?)");
+            $stmt->execute([$anthropic_api_key]);
+        }
         
         // Dodaj domyślne ustawienia
         $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('processing_delay_minutes', '1')");
@@ -458,10 +465,14 @@ function getDbConnection() {
                                 <label for="gemini_api_key" class="form-label">Klucz API Google Gemini</label>
                                 <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key">
                                 <div class="form-text">
-                                    Klucz API potrzebny do generowania treści. Możesz go uzyskać w 
+                                    Klucz API potrzebny do generowania treści. Możesz go uzyskać w
                                     <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a>.
                                     Możesz też dodać go później w ustawieniach.
                                 </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="anthropic_api_key" class="form-label">Klucz API Anthropic Claude</label>
+                                <input type="password" class="form-control" id="anthropic_api_key" name="anthropic_api_key">
                             </div>
                             
                             <button type="submit" class="btn btn-primary">Zainstaluj</button>
