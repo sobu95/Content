@@ -41,6 +41,7 @@ if ($_POST) {
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             fields JSON NOT NULL,
+            requires_verification TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
@@ -161,7 +162,7 @@ if ($_POST) {
         $pdo->exec($sql);
         
         // Dodaj domyślny typ treści
-        $stmt = $pdo->prepare("INSERT INTO content_types (name, fields) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO content_types (name, fields, requires_verification) VALUES (?, ?, 1)");
         $default_fields = json_encode([
             'url' => ['type' => 'url', 'label' => 'Adres URL', 'required' => true],
             'keywords' => ['type' => 'textarea', 'label' => 'Frazy SEO', 'required' => true],

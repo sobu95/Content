@@ -22,6 +22,7 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 if ($_POST) {
     $name = trim($_POST['name']);
     $content_type_id = isset($_POST['content_type_id']) ? $_POST['content_type_id'] : null;
+    $requires_verification = isset($_POST['requires_verification']) ? 1 : 0;
     
     // Budowanie pól
     $fields = [];
@@ -45,13 +46,13 @@ if ($_POST) {
         try {
             if ($content_type_id) {
                 // Edycja
-                $stmt = $pdo->prepare("UPDATE content_types SET name = ?, fields = ? WHERE id = ?");
-                $stmt->execute([$name, json_encode($fields), $content_type_id]);
+                $stmt = $pdo->prepare("UPDATE content_types SET name = ?, fields = ?, requires_verification = ? WHERE id = ?");
+                $stmt->execute([$name, json_encode($fields), $requires_verification, $content_type_id]);
                 $success = 'Typ treści został zaktualizowany.';
             } else {
                 // Dodawanie
-                $stmt = $pdo->prepare("INSERT INTO content_types (name, fields) VALUES (?, ?)");
-                $stmt->execute([$name, json_encode($fields)]);
+                $stmt = $pdo->prepare("INSERT INTO content_types (name, fields, requires_verification) VALUES (?, ?, ?)");
+                $stmt->execute([$name, json_encode($fields), $requires_verification]);
                 $success = 'Typ treści został utworzony.';
             }
         } catch(Exception $e) {
@@ -184,6 +185,10 @@ $content_types = $stmt->fetchAll();
                             <label for="name" class="form-label">Nazwa typu treści *</label>
                             <input type="text" class="form-control" id="name" name="name" required>
                         </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="requires_verification" name="requires_verification" checked>
+                            <label class="form-check-label" for="requires_verification">Wymaga weryfikacji</label>
+                        </div>
                         
                         <h6>Pola formularza</h6>
                         <div id="fields-container">
@@ -255,6 +260,7 @@ $content_types = $stmt->fetchAll();
             document.getElementById('contentTypeModalTitle').textContent = 'Edytuj typ treści';
             document.getElementById('content_type_id').value = contentType.id;
             document.getElementById('name').value = contentType.name;
+            document.getElementById('requires_verification').checked = contentType.requires_verification == 1;
             
             // Wyczyść pola
             document.getElementById('fields-container').innerHTML = '';
@@ -276,6 +282,7 @@ $content_types = $stmt->fetchAll();
             document.getElementById('content_type_id').value = '';
             document.getElementById('name').value = '';
             document.getElementById('fields-container').innerHTML = '';
+            document.getElementById('requires_verification').checked = true;
             fieldIndex = 0;
             
             // Dodaj domyślne pole URL
@@ -285,6 +292,7 @@ $content_types = $stmt->fetchAll();
         // Dodaj domyślne pole URL przy pierwszym otwarciu
         document.addEventListener('DOMContentLoaded', function() {
             addField('url', 'url', 'Adres URL', true);
+            document.getElementById('requires_verification').checked = true;
         });
     </script>
 </body>
