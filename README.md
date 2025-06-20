@@ -55,6 +55,17 @@ ALTER DATABASE <db_name> CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 ALTER TABLE <table_name> CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
+## Node dependencies and linting
+
+Install the Node packages defined in `package.json` before running the lint
+script. The repository includes a `package-lock.json` so you can use `npm ci`
+for reproducible installs:
+
+```bash
+npm install # or `npm ci`
+npm run lint
+```
+
 ## Managing language models
 
 Administrators can define multiple API endpoints for text generation. Use **Ustawienia** in the admin panel to add, edit or delete models in the *Modele językowe* section. Each model defines the endpoint URL and generation configuration parameters (temperature, topK, topP, max tokens).
