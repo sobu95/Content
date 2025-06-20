@@ -31,7 +31,7 @@ if ($_POST) {
         $sql = "
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            email VARCHAR(255) NOT NULL UNIQUE,
+            email VARCHAR(191) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
             role ENUM('admin', 'user') DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -40,7 +40,7 @@ if ($_POST) {
         CREATE TABLE IF NOT EXISTS content_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
-            fields JSON NOT NULL,
+            fields LONGTEXT NOT NULL,
             requires_verification TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -89,7 +89,7 @@ if ($_POST) {
             name VARCHAR(255) NOT NULL,
             status ENUM('pending', 'processing', 'completed', 'failed', 'partial_failure') DEFAULT 'pending',
             strictness_level DECIMAL(2,1) DEFAULT 0.0,
-            task_data JSON,
+            task_data LONGTEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             FOREIGN KEY (content_type_id) REFERENCES content_types(id),
@@ -101,7 +101,7 @@ if ($_POST) {
             id INT AUTO_INCREMENT PRIMARY KEY,
             task_id INT NOT NULL,
             url VARCHAR(500) NOT NULL,
-            input_data JSON,
+            input_data LONGTEXT,
             page_content TEXT,
             status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
